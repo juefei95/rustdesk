@@ -42,6 +42,8 @@ Rust crate 的模块装配和平台条件编译集中在 [`src/lib.rs`](../src/l
 
 桌面发行版并非直接从 `src/main.rs` 启动 Flutter。各平台原生 Runner 会先调用 Rust 核心入口，Rust 决定当前命令是后台模式还是需要继续显示 Flutter UI。
 
+这里容易混淆“Flutter 工程先启动”和“Flutter UI 先启动”。更准确的说法是：操作系统先启动 Flutter 桌面工程里的原生 Runner；此时 Flutter Engine 和 Dart UI 还没有跑起来。Runner 先调用 Rust 导出的入口做启动分发；只有 Rust 返回“需要界面”时，Runner 才继续创建 Flutter Engine、加载 Dart 入口并显示窗口。因此架构上可以说桌面包的外壳来自 Flutter 平台工程，但启动决策先交给 Rust。
+
 | 平台 | 原生入口 | Rust 预处理 | Dart 入口 |
 | --- | --- | --- | --- |
 | Windows | [`wWinMain`](../flutter/windows/runner/main.cpp#L20) 动态加载 `librustdesk.dll` | 调用 `rustdesk_core_main_args()`，并把需要 Flutter 处理的参数传给 Runner | [`main(List<String> args)`](../flutter/lib/main.dart#L41) |
@@ -79,7 +81,31 @@ Flutter 桌面入口按启动参数分派窗口（见 [`flutter/lib/main.dart`](
 
 所有分支都会通过 [`initEnv()`](../flutter/lib/main.dart#L123) 初始化平台 FFI、全局 FFI 和事件处理。主窗口由 [`runMainApp()`](../flutter/lib/main.dart#L136) 启动，最终桌面显示 `DesktopTabPage`，移动端显示 `HomePage`（[`App.build()`](../flutter/lib/main.dart#L486)）。
 
-### 2.2 Rust 原生入口与辅助二进制
+### 2.2 Flutter 桌面 Runner 与 Rust 库配置
+
+`flutter/windows`、`flutter/linux` 和 `flutter/macos` 下的 Runner 工程来自 Flutter 桌面模板，Flutter 工具会维护其中一部分文件，尤其是 `flutter/*/flutter/` 下的托管构建规则和 `ephemeral/` 生成文件。业务开发通常不直接改这些托管文件；RustDesk 只在平台 Runner 和平台构建脚本中加入必要的自定义代码，让原生宿主能够先调用 Rust，然后再启动 Flutter。
+
+桌面 Runner 不是 Dart 代码生成出来的界面本身，而是承载 Flutter Engine 的原生宿主：
+
+| 平台 | 原生宿主入口 | Flutter 宿主/构建配置 | Rust 如何被宿主找到 |
+| --- | --- | --- | --- |
+| Windows | [`flutter/windows/runner/main.cpp`](../flutter/windows/runner/main.cpp#L20) 的 `wWinMain` | [`flutter/windows/CMakeLists.txt`](../flutter/windows/CMakeLists.txt#L62) 引入 Flutter 托管规则并添加 `runner`；[`runner/CMakeLists.txt`](../flutter/windows/runner/CMakeLists.txt#L11) 定义 `rustdesk.exe`，链接 `flutter` 和 `flutter_wrapper_app` | `main.cpp` 通过 `LoadLibraryA("librustdesk.dll")` 和 `GetProcAddress("rustdesk_core_main_args")` 调用 Rust；顶层 CMake 将 `target/<debug|release>/librustdesk.dll` 安装到 exe 同级目录 |
+| Linux | [`flutter/linux/main.cc`](../flutter/linux/main.cc#L68) 的 `main` | [`flutter/linux/CMakeLists.txt`](../flutter/linux/CMakeLists.txt#L49) 引入 Flutter 托管规则，定义 GTK Runner，并链接 `flutter`、GTK、`dl` | `main.cc` 通过 `dlopen`/`dlsym("rustdesk_core_main")` 调用 Rust；CMake 将 `target/<debug|release>/liblibrustdesk.so` 安装为 bundle 的 `lib/librustdesk.so`，并设置 `RPATH=$ORIGIN/lib` |
+| macOS | [`flutter/macos/Runner/MainFlutterWindow.swift`](../flutter/macos/Runner/MainFlutterWindow.swift#L39) 的 `awakeFromNib` | [`Runner.xcodeproj`](../flutter/macos/Runner.xcodeproj/project.pbxproj#L245) 包含 `Runner` 和 `Flutter Assemble` 目标；[`Flutter-*.xcconfig`](../flutter/macos/Flutter/Flutter-Release.xcconfig#L1) 引入 Flutter 生成配置 | Rust 符号通过 macOS Runner 工程/桥接头进入同一进程，Swift 直接调用 `rustdesk_core_main()`，随后创建 `FlutterViewController` |
+
+Rust 侧能被 C++/Swift 调用，靠的是库目标和 C ABI 导出，而不是普通 Rust 二进制入口：
+
+- [`Cargo.toml`](../Cargo.toml#L11) 将库声明为 `cdylib`/`staticlib`/`rlib`，桌面 Flutter 包使用其中的动态库产物；
+- [`Cargo.toml`](../Cargo.toml#L28) 的 `flutter` feature 启用 `flutter_rust_bridge`；
+- [`src/flutter.rs`](../src/flutter.rs#L106) 和 [`src/flutter.rs`](../src/flutter.rs#L126) 使用 `#[no_mangle] pub extern "C"` 导出稳定符号，供 `GetProcAddress`、`dlsym` 或 Swift 桥接调用；
+- [`build.py`](../build.py#L928) 先构建 Rust 库，再执行 `flutter build`，最后由各平台构建脚本把 Flutter 运行时、Dart assets/AOT 产物、插件库和 Rust 动态库放进同一个桌面包。
+
+所以“在哪里配置 Flutter 让它调用 Rust”可以分成两层看：
+
+1. 启动阶段的 Runner 调 Rust：配置在 `flutter/windows/runner/main.cpp`、`flutter/linux/main.cc`、`flutter/macos/Runner/MainFlutterWindow.swift` 以及对应 CMake/Xcode 工程里。
+2. UI 运行后的 Dart 调 Rust：配置在 [`flutter/pubspec.yaml`](../flutter/pubspec.yaml#L42) 的 `flutter_rust_bridge` 依赖、生成的 Dart bridge、[`flutter/lib/models/native_model.dart`](../flutter/lib/models/native_model.dart#L136) 的动态库加载逻辑，以及 [`src/flutter_ffi.rs`](../src/flutter_ffi.rs) 暴露给生成绑定的 Rust API 中。
+
+### 2.3 Rust 原生入口与辅助二进制
 
 [`src/main.rs`](../src/main.rs#L1) 是 Cargo 默认二进制 `rustdesk` 的入口：
 
@@ -91,7 +117,7 @@ Flutter 桌面入口按启动参数分派窗口（见 [`flutter/lib/main.dart`](
 - [`src/service.rs`](../src/service.rs#L1)：macOS 服务入口；其他平台为空入口；
 - [`src/naming.rs`](../src/naming.rs#L1)：生成或解析带自定义服务器配置的可执行文件名，属于构建/定制工具，不是主应用入口。
 
-### 2.3 Android 与 iOS 入口
+### 2.4 Android 与 iOS 入口
 
 - Android Activity 是 [`MainActivity`](../flutter/android/app/src/main/kotlin/com/carriez/flutter_hbb/MainActivity.kt#L38)，负责 Flutter 平台通道、权限和系统 API；前台被控服务位于 `MainService.kt`。JNI 包装在 [`ffi.kt`](../flutter/android/app/src/main/kotlin/ffi.kt#L1)，首次使用时加载 `librustdesk.so`，`startService()` 最终进入 Rust。
 - iOS 应用入口是 [`AppDelegate`](../flutter/ios/Runner/AppDelegate.swift#L4)，注册 Flutter 插件并通过桥接头链接 Rust 符号。移动端 Dart 仍从 [`main.dart`](../flutter/lib/main.dart#L41) 进入，并由 [`runMobileApp()`](../flutter/lib/main.dart#L181) 初始化。

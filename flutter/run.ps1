@@ -69,30 +69,6 @@ function Find-LlvmPath {
     return $null
 }
 
-function Find-VcpkgRoot {
-    $Candidates = @(
-        $env:VCPKG_ROOT,
-        (Join-Path $ProjectDirectory "vcpkg"),
-        (Join-Path (Split-Path -Parent $ProjectDirectory) "vcpkg"),
-        "C:\vcpkg",
-        "D:\vcpkg",
-        "E:\vcpkg"
-    )
-
-    $VcpkgCommand = Get-Command vcpkg -ErrorAction SilentlyContinue
-    if ($VcpkgCommand) {
-        $Candidates += Split-Path -Parent $VcpkgCommand.Source
-    }
-
-    foreach ($Candidate in $Candidates) {
-        if ($Candidate -and (Test-Path (Join-Path $Candidate "vcpkg.exe"))) {
-            return $Candidate
-        }
-    }
-
-    return $null
-}
-
 function Find-CmakeBinPath {
     $CmakeCommand = Get-Command cmake -ErrorAction SilentlyContinue
     if ($CmakeCommand) {
@@ -122,36 +98,11 @@ function Find-CmakeBinPath {
 }
 
 function Install-VcpkgPackages {
-    param([string]$VcpkgRoot)
-
-    $TripletDirectory = Join-Path $VcpkgRoot "installed\x64-windows-static"
-    $RequiredFiles = @(
-        "lib\vpx.lib",
-        "include\libyuv.h",
-        "lib\opus.lib",
-        "lib\aom.lib"
+    Invoke-CommandChecked vcpkg @(
+        "install",
+        "--triplet=x64-windows-static",
+        "--host-triplet=x64-windows"
     )
-
-    $MissingPackage = $false
-    foreach ($RequiredFile in $RequiredFiles) {
-        if (-not (Test-Path (Join-Path $TripletDirectory $RequiredFile))) {
-            $MissingPackage = $true
-            break
-        }
-    }
-
-    if ($MissingPackage) {
-        Invoke-CommandChecked (Join-Path $VcpkgRoot "vcpkg.exe") @(
-            "install",
-            "libvpx:x64-windows-static",
-            "libyuv:x64-windows-static",
-            "opus:x64-windows-static",
-            "aom:x64-windows-static",
-            "--classic",
-            "--host-triplet=x64-windows",
-            "--x-install-root=$(Join-Path $VcpkgRoot "installed")"
-        )
-    }
 }
 
 try {
@@ -169,18 +120,12 @@ if (-not $LlvmPath) {
 }
 $env:LIBCLANG_PATH = Join-Path $LlvmPath "bin"
 
-$VcpkgRoot = Find-VcpkgRoot
-if (-not $VcpkgRoot) {
-    Write-Error "vcpkg was not found. Clone and bootstrap vcpkg, then set VCPKG_ROOT to that folder."
-    exit 1
-}
-$env:VCPKG_ROOT = $VcpkgRoot
 Remove-Item Env:VCPKG_FORCE_SYSTEM_BINARIES -ErrorAction SilentlyContinue
 $CmakeBinPath = Find-CmakeBinPath
 if ($CmakeBinPath) {
     $env:PATH = "$CmakeBinPath;$env:PATH"
 }
-Install-VcpkgPackages $VcpkgRoot
+Install-VcpkgPackages
 
 Invoke-CommandChecked cargo @(
     "install", "cargo-expand", "--version", "1.0.95", "--locked"

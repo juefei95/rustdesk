@@ -105,7 +105,28 @@ Rust 侧能被 C++/Swift 调用，靠的是库目标和 C ABI 导出，而不是
 1. 启动阶段的 Runner 调 Rust：配置在 `flutter/windows/runner/main.cpp`、`flutter/linux/main.cc`、`flutter/macos/Runner/MainFlutterWindow.swift` 以及对应 CMake/Xcode 工程里。
 2. UI 运行后的 Dart 调 Rust：配置在 [`flutter/pubspec.yaml`](../flutter/pubspec.yaml#L42) 的 `flutter_rust_bridge` 依赖、生成的 Dart bridge、[`flutter/lib/models/native_model.dart`](../flutter/lib/models/native_model.dart#L136) 的动态库加载逻辑，以及 [`src/flutter_ffi.rs`](../src/flutter_ffi.rs) 暴露给生成绑定的 Rust API 中。
 
-### 2.3 Rust 原生入口与辅助二进制
+### 2.3 构建与运行脚本
+
+根目录和 `flutter/` 目录下的几个脚本处在不同层级：`build.rs` 属于 Cargo 编译过程，`build.py` 属于发行包编排，`flutter/run.ps1` 和 `flutter/run.sh` 更偏本地 Flutter 调试启动。
+
+| 文件 | 运行者 | 主要作用 | 常见用法 |
+| --- | --- | --- | --- |
+| [`build.rs`](../build.rs#L80) | Cargo 自动调用 | 编译期辅助脚本：生成版本信息，按平台编译少量 C/C++/Objective-C++ 代码，补充链接库和资源。它不是手动入口，也不会单独生成完整项目。 | 执行 `cargo build`、`cargo run` 或 `cargo build --features flutter` 时自动触发。 |
+| [`build.py`](../build.py#L968) | 开发者、CI 或打包流程手动调用 | 跨平台构建/打包编排：解析 `--flutter`、`--hwcodec`、`--drm` 等参数，选择 Cargo feature，调用 Rust/Flutter 构建并生成 deb、rpm、dmg、Windows 安装包等产物。 | `python build.py --flutter` 构建 Flutter 发行包；`python build.py --print-features --flutter --hwcodec` 查询对应 Cargo feature。 |
+| [`flutter/run.ps1`](../flutter/run.ps1#L157) | Windows PowerShell 手动调用 | Windows Flutter 调试脚本：查找 LLVM、vcpkg、CMake，安装缺失的 vcpkg 包和 bridge 工具，生成 `generated_bridge.dart`，构建 Rust `flutter` feature，最后启动 Windows Flutter Runner。 | 在 Windows 上执行 `cd flutter; .\run.ps1`，额外 Flutter 参数会继续传给 `flutter run -d windows`。 |
+| [`flutter/run.sh`](../flutter/run.sh#L3) | Linux/macOS shell 手动调用 | 类 Unix Flutter 调试脚本：安装 `flutter_rust_bridge_codegen`，拉取 Dart 依赖，生成 bridge，执行 `cargo build --features flutter`，最后 `flutter run`。它不负责自动寻找或安装 LLVM/vcpkg/CMake。 | 在 Linux/macOS 或兼容 shell 中执行 `cd flutter && ./run.sh`；例如 `./run.sh -d linux`。 |
+
+这些脚本之外，中文 README 还提供了 Docker 构建路径（见 [`docs/README-ZH.md`](README-ZH.md#使用-docker-编译)）：先用 `docker build -t "rustdesk-builder" .` 准备镜像，再用 `docker run --rm -it -v $PWD:/home/user/rustdesk ... rustdesk-builder` 在容器里构建。它的价值是把 Rust、C++、vcpkg、系统库等开发依赖收进容器，适合本机环境不好安装或希望复用固定构建环境的场景；生成的 `target/debug/rustdesk` 或 `target/release/rustdesk` 仍在挂载出来的仓库目录下运行。
+
+选择入口时可以按目标区分：
+
+- 只想跑旧 Sciter/普通 Rust 入口：按 README 准备依赖后在仓库根目录执行 `cargo run`，`build.rs` 会被 Cargo 自动调用。
+- 想在 Windows 上调试当前 Flutter 桌面 UI：优先用 `flutter/run.ps1`，因为它会处理 Windows 下 bridge、LLVM 和 vcpkg 的常见准备工作。
+- 想在 Linux/macOS 上调试 Flutter UI：用 `flutter/run.sh`，但要先保证系统依赖、LLVM/libclang、vcpkg 等环境已经就绪。
+- 想产出可分发安装包或 CI 产物：用 `build.py`，例如 `python build.py --flutter`；它比 `run.ps1`/`run.sh` 更接近发布构建，不只是启动调试会话。
+- 想避开本机开发环境安装成本：按中文 README 的 Docker 流程构建容器，再在容器中执行构建命令；注意 README 也说明 `install`、`run` 等 Cargo 子命令不适合在容器内直接作为宿主程序运行。
+
+### 2.4 Rust 原生入口与辅助二进制
 
 [`src/main.rs`](../src/main.rs#L1) 是 Cargo 默认二进制 `rustdesk` 的入口：
 
@@ -117,7 +138,7 @@ Rust 侧能被 C++/Swift 调用，靠的是库目标和 C ABI 导出，而不是
 - [`src/service.rs`](../src/service.rs#L1)：macOS 服务入口；其他平台为空入口；
 - [`src/naming.rs`](../src/naming.rs#L1)：生成或解析带自定义服务器配置的可执行文件名，属于构建/定制工具，不是主应用入口。
 
-### 2.4 Android 与 iOS 入口
+### 2.5 Android 与 iOS 入口
 
 - Android Activity 是 [`MainActivity`](../flutter/android/app/src/main/kotlin/com/carriez/flutter_hbb/MainActivity.kt#L38)，负责 Flutter 平台通道、权限和系统 API；前台被控服务位于 `MainService.kt`。JNI 包装在 [`ffi.kt`](../flutter/android/app/src/main/kotlin/ffi.kt#L1)，首次使用时加载 `librustdesk.so`，`startService()` 最终进入 Rust。
 - iOS 应用入口是 [`AppDelegate`](../flutter/ios/Runner/AppDelegate.swift#L4)，注册 Flutter 插件并通过桥接头链接 Rust 符号。移动端 Dart 仍从 [`main.dart`](../flutter/lib/main.dart#L41) 进入，并由 [`runMobileApp()`](../flutter/lib/main.dart#L181) 初始化。

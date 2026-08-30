@@ -161,6 +161,19 @@ function New-DirectoryJunction {
     New-Item -ItemType Junction -Path $Path -Target $Target | Out-Null
 }
 
+function Set-FileContentIfChanged {
+    param(
+        [string]$Path,
+        [string]$Content
+    )
+
+    if ((Test-Path $Path) -and ([System.IO.File]::ReadAllText($Path) -eq $Content)) {
+        return
+    }
+
+    [System.IO.File]::WriteAllText($Path, $Content)
+}
+
 function Initialize-CargoManifestOverlay {
     $OverlayRoot = Join-Path $ProjectDirectory "target\run-ps1-overlay"
     New-Item -ItemType Directory -Path $OverlayRoot -Force | Out-Null
@@ -189,7 +202,7 @@ function Initialize-CargoManifestOverlay {
     $PatchedScrapManifest = $OriginalScrapManifest -replace `
         'drm = \["wayland", "hbb_common/wayland_probe"\]', `
         'drm = ["wayland"]'
-    [System.IO.File]::WriteAllText((Join-Path $OverlayScrap "Cargo.toml"), $PatchedScrapManifest)
+    Set-FileContentIfChanged (Join-Path $OverlayScrap "Cargo.toml") $PatchedScrapManifest
 
     Get-ChildItem -LiteralPath (Join-Path $ProjectDirectory "libs\scrap") -Force |
         Where-Object { $_.Name -ne "Cargo.toml" } |

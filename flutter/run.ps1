@@ -122,12 +122,26 @@ function Initialize-VcpkgEnvironment {
             Write-Error "$CargoInstalledRoot already exists and is not a directory link."
             exit 1
         }
+        if ($Existing.Target -ne $InstalledRoot) {
+            Remove-Item -LiteralPath $CargoInstalledRoot
+            New-Item -ItemType Junction -Path $CargoInstalledRoot -Target $InstalledRoot | Out-Null
+        }
     } else {
         New-Item -ItemType Junction -Path $CargoInstalledRoot -Target $InstalledRoot | Out-Null
     }
 
     $env:VCPKG_ROOT = $CargoVcpkgRoot
     $env:VCPKG_INSTALLED_ROOT = $InstalledRoot
+}
+
+function Get-CargoBuildArguments {
+    param([string[]]$BuildArguments)
+
+    $CargoArguments = @("build", "--locked", "--features", "flutter", "--lib")
+    if ($BuildArguments -notcontains "--debug") {
+        $CargoArguments += "--release"
+    }
+    return $CargoArguments
 }
 
 try {
@@ -172,10 +186,10 @@ Invoke-CommandChecked flutter_rust_bridge_codegen @(
     "--llvm-path", $LlvmPath
 )
 
-Invoke-CommandChecked cargo @("build", "--locked", "--features", "flutter")
+Invoke-CommandChecked cargo (Get-CargoBuildArguments $args)
 
 Set-Location $FlutterDirectory
-Invoke-CommandChecked flutter (@("run", "-d", "windows") + $args)
+Invoke-CommandChecked flutter (@("build", "windows") + $args)
 } finally {
     Set-Location $OriginalDirectory
 }

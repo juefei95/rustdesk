@@ -3,6 +3,17 @@ $ErrorActionPreference = "Stop"
 $FlutterDirectory = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ProjectDirectory = Split-Path -Parent $FlutterDirectory
 $OriginalDirectory = Get-Location
+$Script:RunPs1ExitCode = 0
+
+function Stop-ScriptWithExitCode {
+    param(
+        [int]$ExitCode,
+        [string]$Message
+    )
+
+    $Script:RunPs1ExitCode = $ExitCode
+    throw $Message
+}
 
 function Invoke-CommandChecked {
     param(
@@ -12,7 +23,7 @@ function Invoke-CommandChecked {
 
     & $Command @Arguments
     if ($LASTEXITCODE -ne 0) {
-        throw "$Command failed with exit code $LASTEXITCODE"
+        Stop-ScriptWithExitCode $LASTEXITCODE "$Command failed with exit code $LASTEXITCODE"
     }
 }
 
@@ -111,16 +122,14 @@ function Initialize-VcpkgEnvironment {
     $CargoInstalledRoot = Join-Path $CargoVcpkgRoot "installed"
 
     if (-not (Test-Path $InstalledRoot)) {
-        Write-Error "vcpkg packages were not installed at $InstalledRoot"
-        exit 1
+        Stop-ScriptWithExitCode 1 "vcpkg packages were not installed at $InstalledRoot"
     }
 
     New-Item -ItemType Directory -Path $CargoVcpkgRoot -Force | Out-Null
     if (Test-Path $CargoInstalledRoot) {
         $Existing = Get-Item -LiteralPath $CargoInstalledRoot -Force
         if (-not $Existing.LinkType) {
-            Write-Error "$CargoInstalledRoot already exists and is not a directory link."
-            exit 1
+            Stop-ScriptWithExitCode 1 "$CargoInstalledRoot already exists and is not a directory link."
         }
         if ($Existing.Target -ne $InstalledRoot) {
             Remove-Item -LiteralPath $CargoInstalledRoot
@@ -282,8 +291,7 @@ if (-not (Test-Path "./libs/hbb_common/Cargo.toml")) {
 
 $LlvmPath = Find-LlvmPath
 if (-not $LlvmPath) {
-    Write-Error "LLVM was not found. Install LLVM for Windows, or set LLVM_PATH to the folder that contains bin\libclang.dll, for example: C:\Program Files\LLVM"
-    exit 1
+    Stop-ScriptWithExitCode 1 "LLVM was not found. Install LLVM for Windows, or set LLVM_PATH to the folder that contains bin\libclang.dll, for example: C:\Program Files\LLVM"
 }
 $env:LIBCLANG_PATH = Join-Path $LlvmPath "bin"
 
@@ -321,6 +329,12 @@ Invoke-WithCargoManifestOverlay {
 Set-Location $FlutterDirectory
 Stop-BuildOutputProcess $ScriptArguments
 Invoke-CommandChecked flutter (@("build", "windows") + $ScriptArguments)
+} catch {
+    if (-not $Script:RunPs1ExitCode) {
+        $Script:RunPs1ExitCode = 1
+    }
+    Write-Error $_
+    exit $Script:RunPs1ExitCode
 } finally {
     Set-Location $OriginalDirectory
 }

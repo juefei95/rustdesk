@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_hbb/common.dart';
@@ -43,8 +45,24 @@ class _SimpleLinkDesktopPageState extends State<SimpleLinkDesktopPage>
   }
 
   Future<void> _hideToTray() async {
+    await _ensureTrayIcon();
     await windowManager.setPreventClose(true);
     await windowManager.hide();
+  }
+
+  Future<void> _ensureTrayIcon() async {
+    if (!Platform.isWindows) {
+      return;
+    }
+    try {
+      await Process.start(
+        Platform.resolvedExecutable,
+        const ['--tray'],
+        mode: ProcessStartMode.detached,
+      );
+    } catch (err) {
+      debugPrint('Failed to start tray process: $err');
+    }
   }
 
   @override

@@ -31,6 +31,7 @@ class _SimpleLinkDesktopPageState extends State<SimpleLinkDesktopPage>
   static const _sidebarColor = Color(0xFFF7F9FC);
 
   int _selectedPage = 0;
+  bool _showLoginPage = false;
 
   @override
   void initState() {
@@ -77,7 +78,7 @@ class _SimpleLinkDesktopPageState extends State<SimpleLinkDesktopPage>
       color: Theme.of(context).scaffoldBackgroundColor,
       child: Column(
         children: [
-          _buildTopBar(context),
+          _buildTopBar(context, loginPage: _showLoginPage),
           const Divider(height: 1),
           Expanded(
             child: Row(
@@ -85,25 +86,37 @@ class _SimpleLinkDesktopPageState extends State<SimpleLinkDesktopPage>
                 _buildSidebar(context),
                 const VerticalDivider(width: 1),
                 Expanded(
-                  child: IndexedStack(
-                    index: _selectedPage,
-                    children: [
-                      _ProductHomePage(
-                        onOpenDevices: () => _selectPage(1),
-                      ),
-                      const _DeviceListPage(),
-                      const _MembershipPage(),
-                      DesktopSettingPage(
-                        key: const ValueKey('simplelink-settings-page'),
-                        initialTabkey: SettingsTabKey.general,
-                      ),
-                      // Keeps the existing main-window lifecycle active while
-                      // the commercial pages replace its visible interface.
-                      const DesktopHomePage(
-                        key: ValueKey('simplelink-main-window-lifecycle'),
-                      ),
-                    ],
-                  ),
+                  child: _showLoginPage
+                      ? const Stack(
+                          children: [
+                            Offstage(
+                              child: DesktopHomePage(
+                                key: ValueKey(
+                                    'simplelink-login-main-window-lifecycle'),
+                              ),
+                            ),
+                            _SimpleLinkLoginPage(),
+                          ],
+                        )
+                      : IndexedStack(
+                          index: _selectedPage,
+                          children: [
+                            _ProductHomePage(
+                              onOpenDevices: () => _selectPage(1),
+                            ),
+                            const _DeviceListPage(),
+                            const _MembershipPage(),
+                            DesktopSettingPage(
+                              key: const ValueKey('simplelink-settings-page'),
+                              initialTabkey: SettingsTabKey.general,
+                            ),
+                            // Keeps the existing main-window lifecycle active while
+                            // the commercial pages replace its visible interface.
+                            const DesktopHomePage(
+                              key: ValueKey('simplelink-main-window-lifecycle'),
+                            ),
+                          ],
+                        ),
                 ),
               ],
             ),
@@ -154,7 +167,7 @@ class _SimpleLinkDesktopPageState extends State<SimpleLinkDesktopPage>
     );
   }
 
-  Widget _buildTopBar(BuildContext context) {
+  Widget _buildTopBar(BuildContext context, {required bool loginPage}) {
     return Material(
       color: Colors.white,
       child: SizedBox(
@@ -174,32 +187,50 @@ class _SimpleLinkDesktopPageState extends State<SimpleLinkDesktopPage>
                 ),
               ),
             ),
-            Obx(() {
-              final userName = gFFI.userModel.userName.value;
-              final isLoggedIn = userName.isNotEmpty;
-              return TextButton.icon(
-                onPressed: isLoggedIn ? () => _selectPage(2) : loginDialog,
-                icon: CircleAvatar(
-                  radius: 13,
-                  backgroundColor: _brandColor.withOpacity(0.12),
-                  child: Icon(
-                    isLoggedIn ? Icons.person : Icons.login,
-                    color: _brandColor,
-                    size: 15,
+            if (loginPage)
+              _WindowActionButton(
+                tooltip: translate('Settings'),
+                icon: Icons.settings_outlined,
+                onPressed: () => _selectPage(3),
+              )
+            else
+              Obx(() {
+                final userName = gFFI.userModel.userName.value;
+                final isLoggedIn = userName.isNotEmpty;
+                return TextButton.icon(
+                  onPressed: isLoggedIn ? () => _selectPage(2) : _openLoginPage,
+                  icon: CircleAvatar(
+                    radius: 13,
+                    backgroundColor: _brandColor.withOpacity(0.12),
+                    child: Icon(
+                      isLoggedIn ? Icons.person : Icons.login,
+                      color: _brandColor,
+                      size: 15,
+                    ),
                   ),
-                ),
-                label: Text(
-                  isLoggedIn
-                      ? gFFI.userModel.displayNameOrUserName
-                      : translate('Login'),
-                ),
-              );
-            }),
+                  label: Text(
+                    isLoggedIn
+                        ? gFFI.userModel.displayNameOrUserName
+                        : translate('Login'),
+                  ),
+                );
+              }),
             const SizedBox(width: 6),
             _WindowActionButton(
               tooltip: translate('Minimize'),
               icon: Icons.remove_rounded,
               onPressed: windowManager.minimize,
+            ),
+            _WindowActionButton(
+              tooltip: translate('Maximize'),
+              icon: Icons.crop_square_rounded,
+              onPressed: () async {
+                if (await windowManager.isMaximized()) {
+                  await windowManager.unmaximize();
+                } else {
+                  await windowManager.maximize();
+                }
+              },
             ),
             _WindowActionButton(
               tooltip: '最小化到托盘',
@@ -214,11 +245,710 @@ class _SimpleLinkDesktopPageState extends State<SimpleLinkDesktopPage>
   }
 
   void _selectPage(int page) {
-    if (_selectedPage == page) {
+    if (!_showLoginPage && _selectedPage == page) {
       return;
     }
-    setState(() => _selectedPage = page);
+    setState(() {
+      _selectedPage = page;
+      _showLoginPage = false;
+    });
   }
+
+  void _openLoginPage() {
+    if (_showLoginPage) {
+      return;
+    }
+    setState(() => _showLoginPage = true);
+  }
+}
+
+class _SimpleLinkLoginPage extends StatefulWidget {
+  const _SimpleLinkLoginPage();
+
+  @override
+  State<_SimpleLinkLoginPage> createState() => _SimpleLinkLoginPageState();
+}
+
+class _SimpleLinkLoginPageState extends State<_SimpleLinkLoginPage> {
+  int _loginMode = 0;
+
+  @override
+  Widget build(BuildContext context) {
+    return ColoredBox(
+      color: const Color(0xFFF8FBFF),
+      child: Stack(
+        children: [
+          const Positioned.fill(
+            child:
+                IgnorePointer(child: CustomPaint(painter: _HomeWavePainter())),
+          ),
+          const Positioned.fill(
+            child: IgnorePointer(
+              child: CustomPaint(painter: _LoginBackgroundPainter()),
+            ),
+          ),
+          Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(72, 48, 72, 28),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 1080),
+                child: Column(
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Expanded(
+                          flex: 11,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const _LoginPageHeadline(),
+                              const SizedBox(height: 30),
+                              _LoginPanel(
+                                selectedMode: _loginMode,
+                                onModeChanged: (mode) =>
+                                    setState(() => _loginMode = mode),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 64),
+                        const Expanded(
+                          flex: 9,
+                          child: _LoginBenefitsPanel(),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 46),
+                    const _LoginSecurityNote(),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _LoginPageHeadline extends StatelessWidget {
+  const _LoginPageHeadline();
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        const _LargeBrandIcon(),
+        const SizedBox(width: 22),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: const [
+            Text(
+              '简连远程助手',
+              style: TextStyle(
+                color: Color(0xFF16213A),
+                fontSize: 38,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            SizedBox(height: 16),
+            Text(
+              '3秒连接电脑，远程协助更简单',
+              style: TextStyle(
+                color: Color(0xFF7B8494),
+                fontSize: 18,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _LargeBrandIcon extends StatelessWidget {
+  const _LargeBrandIcon();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 68,
+      height: 68,
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF2994FF), Color(0xFF1254DF)],
+        ),
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x2B1769FF),
+            blurRadius: 18,
+            offset: Offset(0, 8),
+          ),
+        ],
+      ),
+      child: const Icon(Icons.link_rounded, color: Colors.white, size: 42),
+    );
+  }
+}
+
+class _LoginPanel extends StatelessWidget {
+  const _LoginPanel({
+    required this.selectedMode,
+    required this.onModeChanged,
+  });
+
+  final int selectedMode;
+  final ValueChanged<int> onModeChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 438,
+      padding: const EdgeInsets.fromLTRB(36, 28, 36, 34),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFFE6EBF3)),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x1A15345F),
+            blurRadius: 22,
+            offset: Offset(0, 10),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          _LoginModeTabs(
+            selectedMode: selectedMode,
+            onModeChanged: onModeChanged,
+          ),
+          const SizedBox(height: 30),
+          _LoginInput(
+            icon: Icons.phone_iphone_outlined,
+            hintText: selectedMode == 0 ? '手机号' : '手机号 / 邮箱',
+          ),
+          const SizedBox(height: 22),
+          Row(
+            children: [
+              Expanded(
+                child: _LoginInput(
+                  icon: selectedMode == 0
+                      ? Icons.verified_user_outlined
+                      : Icons.lock_outline,
+                  hintText: selectedMode == 0 ? '验证码' : '密码',
+                  obscureText: selectedMode == 1,
+                ),
+              ),
+              if (selectedMode == 0) ...[
+                const SizedBox(width: 14),
+                SizedBox(
+                  height: 50,
+                  width: 118,
+                  child: OutlinedButton(
+                    onPressed: () {},
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: const Color(0xFF1769FF),
+                      side: const BorderSide(color: Color(0xFFD8E3F5)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                    ),
+                    child: const Text(
+                      '获取验证码',
+                      style: TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+          const SizedBox(height: 36),
+          SizedBox(
+            width: double.infinity,
+            height: 52,
+            child: ElevatedButton(
+              onPressed: loginDialog,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF1769FF),
+                foregroundColor: Colors.white,
+                elevation: 6,
+                shadowColor: const Color(0x4D1769FF),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(6),
+                ),
+              ),
+              child: const Text(
+                '登录',
+                style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
+              ),
+            ),
+          ),
+          const SizedBox(height: 26),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: const [
+              Text(
+                '注册账号',
+                style: TextStyle(
+                  color: Color(0xFF1769FF),
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              SizedBox(width: 22),
+              SizedBox(
+                height: 18,
+                child: VerticalDivider(width: 1, color: Color(0xFFD6DCE8)),
+              ),
+              SizedBox(width: 22),
+              Text(
+                '忘记密码',
+                style: TextStyle(
+                  color: Color(0xFF1769FF),
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _LoginModeTabs extends StatelessWidget {
+  const _LoginModeTabs({
+    required this.selectedMode,
+    required this.onModeChanged,
+  });
+
+  final int selectedMode;
+  final ValueChanged<int> onModeChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        _LoginModeTab(
+          label: '手机号登录',
+          selected: selectedMode == 0,
+          onTap: () => onModeChanged(0),
+        ),
+        const SizedBox(width: 78),
+        _LoginModeTab(
+          label: '密码登录',
+          selected: selectedMode == 1,
+          onTap: () => onModeChanged(1),
+        ),
+      ],
+    );
+  }
+}
+
+class _LoginModeTab extends StatelessWidget {
+  const _LoginModeTab({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(4),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 7),
+        child: Column(
+          children: [
+            Text(
+              label,
+              style: TextStyle(
+                color: selected
+                    ? const Color(0xFF1769FF)
+                    : const Color(0xFF4E5869),
+                fontSize: 17,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 10),
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 160),
+              width: selected ? 80 : 0,
+              height: 3,
+              decoration: BoxDecoration(
+                color: selected ? const Color(0xFF1769FF) : Colors.transparent,
+                borderRadius: BorderRadius.circular(3),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _LoginInput extends StatelessWidget {
+  const _LoginInput({
+    required this.icon,
+    required this.hintText,
+    this.obscureText = false,
+  });
+
+  final IconData icon;
+  final String hintText;
+  final bool obscureText;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 50,
+      child: TextField(
+        obscureText: obscureText,
+        style: const TextStyle(fontSize: 15),
+        decoration: InputDecoration(
+          hintText: hintText,
+          hintStyle: const TextStyle(
+            color: Color(0xFFADB5C2),
+            fontSize: 16,
+            fontWeight: FontWeight.w500,
+          ),
+          prefixIcon: Icon(icon, color: const Color(0xFF7E8898), size: 20),
+          prefixIconConstraints: const BoxConstraints(minWidth: 48),
+          contentPadding:
+              const EdgeInsets.symmetric(horizontal: 14, vertical: 15),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(6),
+            borderSide: const BorderSide(color: Color(0xFFDDE3EC)),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(6),
+            borderSide: const BorderSide(color: Color(0xFF7FB1FF)),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _LoginBenefitsPanel extends StatelessWidget {
+  const _LoginBenefitsPanel();
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: const [
+        SizedBox(height: 26),
+        _LoginDeviceIllustration(),
+        SizedBox(height: 26),
+        _BenefitRow(
+          icon: Icons.devices_outlined,
+          iconColor: Color(0xFF1769FF),
+          backgroundColor: Color(0xFFEAF2FF),
+          title: '手机/电脑都可远控',
+          subtitle: '跨平台远程控制，随时随地高效协助',
+        ),
+        SizedBox(height: 20),
+        _BenefitRow(
+          icon: Icons.inventory_2_outlined,
+          iconColor: Color(0xFF1769FF),
+          backgroundColor: Color(0xFFEAF2FF),
+          title: '设备管理',
+          subtitle: '轻松管理设备，分组分类一目了然',
+        ),
+        SizedBox(height: 20),
+        _BenefitRow(
+          icon: Icons.workspace_premium_outlined,
+          iconColor: Color(0xFFFF9B2F),
+          backgroundColor: Color(0xFFFFF0DB),
+          title: '会员订阅',
+          subtitle: '灵活套餐选择，享受更多高级功能',
+        ),
+        SizedBox(height: 20),
+        _BenefitRow(
+          icon: Icons.support_agent_outlined,
+          iconColor: Color(0xFF1769FF),
+          backgroundColor: Color(0xFFEAF2FF),
+          title: '企业售后支持',
+          subtitle: '专业团队支持，快速响应售后无忧',
+        ),
+      ],
+    );
+  }
+}
+
+class _LoginDeviceIllustration extends StatelessWidget {
+  const _LoginDeviceIllustration();
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 210,
+      child: CustomPaint(
+        painter: _LoginDevicePainter(),
+        child: const SizedBox.expand(),
+      ),
+    );
+  }
+}
+
+class _BenefitRow extends StatelessWidget {
+  const _BenefitRow({
+    required this.icon,
+    required this.iconColor,
+    required this.backgroundColor,
+    required this.title,
+    required this.subtitle,
+  });
+
+  final IconData icon;
+  final Color iconColor;
+  final Color backgroundColor;
+  final String title;
+  final String subtitle;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Container(
+          width: 54,
+          height: 54,
+          decoration: BoxDecoration(
+            color: backgroundColor,
+            shape: BoxShape.circle,
+          ),
+          child: Icon(icon, color: iconColor, size: 28),
+        ),
+        const SizedBox(width: 18),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: const TextStyle(
+                  color: Color(0xFF273148),
+                  fontSize: 17,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 7),
+              Text(
+                subtitle,
+                style: const TextStyle(
+                  color: Color(0xFF8A93A3),
+                  fontSize: 13,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _LoginSecurityNote extends StatelessWidget {
+  const _LoginSecurityNote();
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: const [
+        Icon(Icons.lock_outline, color: Color(0xFF9AA3B2), size: 16),
+        SizedBox(width: 8),
+        Text(
+          '数据传输全程加密，保障您的信息安全',
+          style: TextStyle(color: Color(0xFF8A93A3), fontSize: 13),
+        ),
+      ],
+    );
+  }
+}
+
+class _LoginBackgroundPainter extends CustomPainter {
+  const _LoginBackgroundPainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = const Color(0xFFEFF6FF)
+      ..style = PaintingStyle.fill;
+    final path = Path()
+      ..moveTo(size.width * 0.64, 0)
+      ..lineTo(size.width, 0)
+      ..lineTo(size.width, size.height * 0.88)
+      ..cubicTo(
+        size.width * 0.86,
+        size.height * 0.9,
+        size.width * 0.78,
+        size.height * 0.73,
+        size.width * 0.64,
+        size.height * 0.79,
+      )
+      ..cubicTo(
+        size.width * 0.54,
+        size.height * 0.84,
+        size.width * 0.56,
+        size.height * 0.44,
+        size.width * 0.66,
+        0,
+      )
+      ..close();
+    canvas.drawPath(path, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+class _LoginDevicePainter extends CustomPainter {
+  const _LoginDevicePainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width * 0.5, size.height * 0.72);
+    final shadowPaint = Paint()..color = const Color(0x180D5EDB);
+    canvas.drawOval(
+      Rect.fromCenter(center: center, width: size.width * 0.62, height: 70),
+      shadowPaint,
+    );
+
+    final laptopRect =
+        Rect.fromLTWH(size.width * 0.24, size.height * 0.34, 142, 90);
+    final laptopBody = RRect.fromRectAndRadius(
+      laptopRect,
+      const Radius.circular(5),
+    );
+    canvas.drawRRect(
+      laptopBody,
+      Paint()..color = const Color(0xFF123E8D),
+    );
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        laptopRect.deflate(8),
+        const Radius.circular(3),
+      ),
+      Paint()..color = const Color(0xFF1769FF),
+    );
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(size.width * 0.21, size.height * 0.76, 178, 16),
+        const Radius.circular(5),
+      ),
+      Paint()..color = const Color(0xFFEAF2FF),
+    );
+    canvas.drawPath(
+      Path()
+        ..moveTo(size.width * 0.27, size.height * 0.68)
+        ..lineTo(size.width * 0.65, size.height * 0.68)
+        ..lineTo(size.width * 0.75, size.height * 0.76)
+        ..lineTo(size.width * 0.18, size.height * 0.76)
+        ..close(),
+      Paint()..color = const Color(0xFFFFFFFF),
+    );
+
+    final phoneRect =
+        Rect.fromLTWH(size.width * 0.69, size.height * 0.46, 52, 92);
+    final phone = RRect.fromRectAndRadius(
+      phoneRect,
+      const Radius.circular(8),
+    );
+    canvas.drawRRect(phone, Paint()..color = const Color(0xFF123E8D));
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(phoneRect.deflate(5), const Radius.circular(5)),
+      Paint()..color = const Color(0xFF2F85FF),
+    );
+
+    final logoPaint = Paint()
+      ..color = Colors.white
+      ..strokeWidth = 8
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round;
+    canvas.drawArc(
+      Rect.fromCircle(
+        center: Offset(size.width * 0.45, size.height * 0.55),
+        radius: 13,
+      ),
+      2.35,
+      3.4,
+      false,
+      logoPaint,
+    );
+    canvas.drawArc(
+      Rect.fromCircle(
+        center: Offset(size.width * 0.51, size.height * 0.55),
+        radius: 13,
+      ),
+      -0.8,
+      3.4,
+      false,
+      logoPaint,
+    );
+
+    final phoneLogoPaint = Paint()
+      ..color = Colors.white
+      ..strokeWidth = 5
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round;
+    canvas.drawArc(
+      Rect.fromCircle(
+        center: Offset(size.width * 0.74, size.height * 0.67),
+        radius: 8,
+      ),
+      2.35,
+      3.4,
+      false,
+      phoneLogoPaint,
+    );
+    canvas.drawArc(
+      Rect.fromCircle(
+        center: Offset(size.width * 0.79, size.height * 0.67),
+        radius: 8,
+      ),
+      -0.8,
+      3.4,
+      false,
+      phoneLogoPaint,
+    );
+
+    final dashedPaint = Paint()
+      ..color = const Color(0xFF7FB1FF)
+      ..strokeWidth = 2
+      ..style = PaintingStyle.stroke;
+    for (var i = 0; i < 8; i++) {
+      final start = 0.4 + i * 0.32;
+      canvas.drawArc(
+        Rect.fromCenter(
+          center: Offset(size.width * 0.62, size.height * 0.44),
+          width: 118,
+          height: 62,
+        ),
+        start,
+        0.16,
+        false,
+        dashedPaint,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
 class _WindowActionButton extends StatelessWidget {
@@ -1139,7 +1869,8 @@ class _DeviceListPageState extends State<_DeviceListPage> {
 }
 
 class _DeviceSectionHeader extends StatelessWidget {
-  const _DeviceSectionHeader({required this.title, required this.icon, this.actions = const []});
+  const _DeviceSectionHeader(
+      {required this.title, required this.icon, this.actions = const []});
 
   final String title;
   final IconData icon;
@@ -1151,7 +1882,8 @@ class _DeviceSectionHeader extends StatelessWidget {
       children: [
         Icon(icon, size: 21, color: const Color(0xFF1769FF)),
         const SizedBox(width: 10),
-        Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+        Text(title,
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
         const Spacer(),
         ...actions,
       ],
@@ -1160,7 +1892,13 @@ class _DeviceSectionHeader extends StatelessWidget {
 }
 
 class _DeviceListRow extends StatelessWidget {
-  const _DeviceListRow({required this.name, required this.platform, required this.id, required this.online, this.isCurrent = false, this.onTap});
+  const _DeviceListRow(
+      {required this.name,
+      required this.platform,
+      required this.id,
+      required this.online,
+      this.isCurrent = false,
+      this.onTap});
 
   final String name;
   final String platform;
@@ -1185,19 +1923,42 @@ class _DeviceListRow extends StatelessWidget {
         padding: const EdgeInsets.symmetric(vertical: 12),
         child: Row(
           children: [
-            Container(width: 9, height: 9, decoration: BoxDecoration(color: online ? const Color(0xFF19B76B) : const Color(0xFFB6BDC8), shape: BoxShape.circle)),
+            Container(
+                width: 9,
+                height: 9,
+                decoration: BoxDecoration(
+                    color: online
+                        ? const Color(0xFF19B76B)
+                        : const Color(0xFFB6BDC8),
+                    shape: BoxShape.circle)),
             const SizedBox(width: 14),
             Icon(platformIcon, size: 24, color: const Color(0xFF1769FF)),
             const SizedBox(width: 14),
             Expanded(
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(name, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
-                const SizedBox(height: 3),
-                Text('$platform · 北京市 · ${formatID(id)}', style: const TextStyle(fontSize: 12, color: Color(0xFF8A93A3))),
-              ]),
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(name,
+                        style: const TextStyle(
+                            fontSize: 15, fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 3),
+                    Text('$platform · 北京市 · ${formatID(id)}',
+                        style: const TextStyle(
+                            fontSize: 12, color: Color(0xFF8A93A3))),
+                  ]),
             ),
             if (isCurrent)
-              Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5), decoration: BoxDecoration(color: const Color(0xFFEAF2FF), borderRadius: BorderRadius.circular(6)), child: const Text('本设备', style: TextStyle(color: Color(0xFF1769FF), fontSize: 12, fontWeight: FontWeight.w600))),
+              Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  decoration: BoxDecoration(
+                      color: const Color(0xFFEAF2FF),
+                      borderRadius: BorderRadius.circular(6)),
+                  child: const Text('本设备',
+                      style: TextStyle(
+                          color: Color(0xFF1769FF),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600))),
           ],
         ),
       ),

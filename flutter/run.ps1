@@ -105,6 +105,31 @@ function Install-VcpkgPackages {
     )
 }
 
+function Initialize-VcpkgEnvironment {
+    $InstalledRoot = Join-Path $ProjectDirectory "vcpkg_installed"
+    $CargoVcpkgRoot = Join-Path $ProjectDirectory "target\vcpkg-root"
+    $CargoInstalledRoot = Join-Path $CargoVcpkgRoot "installed"
+
+    if (-not (Test-Path $InstalledRoot)) {
+        Write-Error "vcpkg packages were not installed at $InstalledRoot"
+        exit 1
+    }
+
+    New-Item -ItemType Directory -Path $CargoVcpkgRoot -Force | Out-Null
+    if (Test-Path $CargoInstalledRoot) {
+        $Existing = Get-Item -LiteralPath $CargoInstalledRoot -Force
+        if (-not $Existing.LinkType) {
+            Write-Error "$CargoInstalledRoot already exists and is not a directory link."
+            exit 1
+        }
+    } else {
+        New-Item -ItemType Junction -Path $CargoInstalledRoot -Target $InstalledRoot | Out-Null
+    }
+
+    $env:VCPKG_ROOT = $CargoVcpkgRoot
+    $env:VCPKG_INSTALLED_ROOT = $InstalledRoot
+}
+
 try {
 Set-Location $ProjectDirectory
 
@@ -126,6 +151,7 @@ if ($CmakeBinPath) {
     $env:PATH = "$CmakeBinPath;$env:PATH"
 }
 Install-VcpkgPackages
+Initialize-VcpkgEnvironment
 
 Invoke-CommandChecked cargo @(
     "install", "cargo-expand", "--version", "1.0.95", "--locked"

@@ -97,7 +97,7 @@ class _SimpleLinkDesktopPageState extends State<SimpleLinkDesktopPage>
 
   Widget _buildSidebar(BuildContext context) {
     return Container(
-      width: 134,
+      width: 150,
       color: _sidebarColor,
       padding: const EdgeInsets.fromLTRB(12, 24, 12, 14),
       child: Column(
@@ -690,6 +690,10 @@ class _QuickConnectCardState extends State<_QuickConnectCard> {
   }) {
     return InputDecoration(
       hintText: hintText,
+      hintStyle: const TextStyle(
+        color: Color(0xFF9AA3B2),
+        fontSize: 14,
+      ),
       prefixIcon: Icon(icon, size: 20),
       prefixIconConstraints: const BoxConstraints(minWidth: 48),
       isDense: true,

@@ -340,11 +340,7 @@ packages:
     description:
       path: "."
       ref: HEAD
-<<<<<<< HEAD
-      resolved-ref: 8b774a66671cbb9bcb2631af6ac28f9bdd469ce3
-=======
-      resolved-ref: "533883bcb0ffe91a9afdb13b8bac9b14b3e054ba"
->>>>>>> fc73b7797 (页面修改暂时提交)
+      resolved-ref: "8b774a66671cbb9bcb2631af6ac28f9bdd469ce3"
       url: "https://github.com/rustdesk-org/rustdesk_desktop_multi_window"
     source: git
     version: "0.1.0"

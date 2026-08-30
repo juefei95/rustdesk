@@ -12,7 +12,7 @@ function Invoke-CommandChecked {
 
     & $Command @Arguments
     if ($LASTEXITCODE -ne 0) {
-        exit $LASTEXITCODE
+        throw "$Command failed with exit code $LASTEXITCODE"
     }
 }
 
@@ -144,8 +144,89 @@ function Get-CargoBuildArguments {
     return $CargoArguments
 }
 
+function New-DirectoryJunction {
+    param(
+        [string]$Path,
+        [string]$Target
+    )
+
+    if (Test-Path $Path) {
+        $Existing = Get-Item -LiteralPath $Path -Force
+        if ($Existing.LinkType -and $Existing.Target -eq $Target) {
+            return
+        }
+        throw "$Path already exists and does not point to $Target"
+    }
+
+    New-Item -ItemType Junction -Path $Path -Target $Target | Out-Null
+}
+
+function Initialize-CargoManifestOverlay {
+    $OverlayRoot = Join-Path $ProjectDirectory "target\run-ps1-overlay"
+    New-Item -ItemType Directory -Path $OverlayRoot -Force | Out-Null
+
+    Copy-Item -LiteralPath (Join-Path $ProjectDirectory "Cargo.toml") -Destination (Join-Path $OverlayRoot "Cargo.toml") -Force
+    Copy-Item -LiteralPath (Join-Path $ProjectDirectory "Cargo.lock") -Destination (Join-Path $OverlayRoot "Cargo.lock") -Force
+    Copy-Item -LiteralPath (Join-Path $ProjectDirectory "build.rs") -Destination (Join-Path $OverlayRoot "build.rs") -Force
+
+    New-DirectoryJunction (Join-Path $OverlayRoot "src") (Join-Path $ProjectDirectory "src")
+    New-DirectoryJunction (Join-Path $OverlayRoot "flutter") (Join-Path $ProjectDirectory "flutter")
+    New-DirectoryJunction (Join-Path $OverlayRoot "res") (Join-Path $ProjectDirectory "res")
+
+    $OverlayLibs = Join-Path $OverlayRoot "libs"
+    New-Item -ItemType Directory -Path $OverlayLibs -Force | Out-Null
+    foreach ($Name in @("hbb_common", "enigo", "clipboard", "virtual_display", "portable", "remote_printer", "libxdo-sys-stub")) {
+        $Target = Join-Path $ProjectDirectory "libs\$Name"
+        if (Test-Path $Target) {
+            New-DirectoryJunction (Join-Path $OverlayLibs $Name) $Target
+        }
+    }
+
+    $OverlayScrap = Join-Path $OverlayLibs "scrap"
+    New-Item -ItemType Directory -Path $OverlayScrap -Force | Out-Null
+    $ScrapManifestPath = Join-Path $ProjectDirectory "libs\scrap\Cargo.toml"
+    $OriginalScrapManifest = [System.IO.File]::ReadAllText($ScrapManifestPath)
+    $PatchedScrapManifest = $OriginalScrapManifest -replace `
+        'drm = \["wayland", "hbb_common/wayland_probe"\]', `
+        'drm = ["wayland"]'
+    [System.IO.File]::WriteAllText((Join-Path $OverlayScrap "Cargo.toml"), $PatchedScrapManifest)
+
+    Get-ChildItem -LiteralPath (Join-Path $ProjectDirectory "libs\scrap") -Force |
+        Where-Object { $_.Name -ne "Cargo.toml" } |
+        ForEach-Object {
+            $OverlayPath = Join-Path $OverlayScrap $_.Name
+            if ($_.PSIsContainer) {
+                New-DirectoryJunction $OverlayPath $_.FullName
+            } else {
+                Copy-Item -LiteralPath $_.FullName -Destination $OverlayPath -Force
+            }
+        }
+
+    return $OverlayRoot
+}
+
+function Invoke-WithCargoManifestOverlay {
+    param([scriptblock]$ScriptBlock)
+
+    $OverlayRoot = Initialize-CargoManifestOverlay
+    $OriginalCargoTargetDir = $env:CARGO_TARGET_DIR
+    try {
+        $env:CARGO_TARGET_DIR = Join-Path $ProjectDirectory "target"
+        Set-Location $OverlayRoot
+        & $ScriptBlock
+    } finally {
+        if ($null -eq $OriginalCargoTargetDir) {
+            Remove-Item Env:CARGO_TARGET_DIR -ErrorAction SilentlyContinue
+        } else {
+            $env:CARGO_TARGET_DIR = $OriginalCargoTargetDir
+        }
+        Set-Location $ProjectDirectory
+    }
+}
+
 try {
 Set-Location $ProjectDirectory
+$ScriptArguments = $args
 
 if (-not (Test-Path "./libs/hbb_common/Cargo.toml")) {
     Write-Host "Initializing Git submodules..."
@@ -179,17 +260,19 @@ Set-Location $FlutterDirectory
 Invoke-CommandChecked flutter @("pub", "get")
 Set-Location $ProjectDirectory
 
-Invoke-CommandChecked flutter_rust_bridge_codegen @(
-    "--rust-input", "./src/flutter_ffi.rs",
-    "--dart-output", "./flutter/lib/generated_bridge.dart",
-    "--c-output", "./flutter/macos/Runner/bridge_generated.h",
-    "--llvm-path", $LlvmPath
-)
+Invoke-WithCargoManifestOverlay {
+    Invoke-CommandChecked flutter_rust_bridge_codegen @(
+        "--rust-input", "./src/flutter_ffi.rs",
+        "--dart-output", "./flutter/lib/generated_bridge.dart",
+        "--c-output", "./flutter/macos/Runner/bridge_generated.h",
+        "--llvm-path", $LlvmPath
+    )
 
-Invoke-CommandChecked cargo (Get-CargoBuildArguments $args)
+    Invoke-CommandChecked cargo (Get-CargoBuildArguments $ScriptArguments)
+}
 
 Set-Location $FlutterDirectory
-Invoke-CommandChecked flutter (@("build", "windows") + $args)
+Invoke-CommandChecked flutter (@("build", "windows") + $ScriptArguments)
 } finally {
     Set-Location $OriginalDirectory
 }

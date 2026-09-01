@@ -11,6 +11,7 @@ import '../common.dart';
 import '../utils/http_service.dart' as http;
 import 'model.dart';
 import 'platform_model.dart';
+import 'remote_control_api.dart';
 
 bool refreshingUser = false;
 
@@ -54,9 +55,23 @@ class UserModel {
     if (bind.isDisableAccount()) return;
     networkError.value = '';
     networkErrorFromServer.value = false;
+    try {
+      await RemoteControlApi.discoverAndSyncConfig();
+    } catch (e) {
+      networkError.value = e.toString();
+    }
     final token = bind.mainGetLocalOption(key: 'access_token');
     if (token == '') {
       await updateOtherModels();
+      return;
+    }
+    if (RemoteControlApi.isEnabled) {
+      _updateLocalUserInfo();
+      try {
+        await RemoteControlApi.canControl();
+      } catch (e) {
+        networkError.value = e.toString();
+      }
       return;
     }
     _updateLocalUserInfo();
@@ -161,6 +176,7 @@ class UserModel {
 
   // update ab and group status
   static Future<void> updateOtherModels() async {
+    if (RemoteControlApi.isEnabled) return;
     await Future.wait([
       gFFI.abModel.pullAb(force: ForcePullAb.listAndCurrent, quiet: false),
       gFFI.groupModel.pull()
@@ -170,6 +186,7 @@ class UserModel {
   Future<void> logOut({String? apiServer}) async {
     final tag = gFFI.dialogManager.showLoading(translate('Waiting'));
     try {
+      if (RemoteControlApi.isEnabled) return;
       final url = apiServer ?? await bind.mainGetApiServer();
       final authHeaders = getHttpHeaders();
       authHeaders['Content-Type'] = "application/json";
@@ -191,6 +208,21 @@ class UserModel {
 
   /// throw [RequestException]
   Future<LoginResponse> login(LoginRequest loginRequest) async {
+    if (await RemoteControlApi.discoverAndSyncConfig()) {
+      final RemoteControlLoginResult result;
+      try {
+        result = await RemoteControlApi.login(
+            loginRequest.username ?? '', loginRequest.password ?? '');
+      } on RemoteControlApiException catch (e) {
+        throw RequestException(0, e.message);
+      }
+      final response = LoginResponse(
+          access_token: result.token,
+          type: HttpType.kAuthResTypeToken,
+          user: UserPayload.fromJson(result.user));
+      _parseAndUpdateUser(response.user!);
+      return response;
+    }
     final url = await bind.mainGetApiServer();
     final resp = await http.post(Uri.parse('$url/api/login'),
         body: jsonEncode(loginRequest.toJson()));

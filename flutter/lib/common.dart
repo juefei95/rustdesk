@@ -40,6 +40,7 @@ import 'desktop/pages/view_camera_page.dart' as desktop_view_camera;
 import 'package:flutter_hbb/desktop/widgets/remote_toolbar.dart';
 import 'models/model.dart';
 import 'models/platform_model.dart';
+import 'models/remote_control_api.dart';
 
 import 'package:flutter_hbb/native/win32.dart'
     if (dart.library.html) 'package:flutter_hbb/web/win32.dart';
@@ -2586,6 +2587,16 @@ connect(BuildContext context, String id,
     String? connToken,
     bool? isSharedPassword}) async {
   if (id == '') return;
+  try {
+    final remoteBackend = await RemoteControlApi.discoverAndSyncConfig();
+    if (remoteBackend && !await RemoteControlApi.canControl()) {
+      showToast('远程控制服务未开通或已到期');
+      return;
+    }
+  } catch (e) {
+    showToast(e.toString());
+    return;
+  }
   if (!isDesktop || desktopType == DesktopType.main) {
     try {
       if (Get.isRegistered<IDTextEditingController>()) {
@@ -3647,6 +3658,9 @@ Future<bool> setServerConfig(
   await bind.mainSetOption(key: 'api-server', value: config.apiServer);
   await bind.mainSetOption(key: 'key', value: config.key);
   final newApiServer = await bind.mainGetApiServer();
+  if (oldApiServer != newApiServer) {
+    await RemoteControlApi.resetDiscovery();
+  }
   if (oldApiServer.isNotEmpty &&
       oldApiServer != newApiServer &&
       gFFI.userModel.isLogin) {

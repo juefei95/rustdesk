@@ -24,6 +24,8 @@ class RemoteControlLoginResult {
 }
 
 class RemoteControlApi {
+  static bool get isConfigured => server.isNotEmpty;
+
   static bool get isEnabled =>
       bind.mainGetLocalOption(key: _backendMarker) == 'Y';
 
@@ -83,7 +85,30 @@ class RemoteControlApi {
           'account': account,
           'password': password,
         }).query);
-    final data = _decode(response);
+    return _parseLoginResult(_decode(response), account);
+  }
+
+  static Future<void> sendSms(String mobile) async {
+    final response = await http.post(Uri.parse('$server/api/remote/sms'),
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        body: Uri(queryParameters: {'mobile': mobile}).query);
+    _decode(response);
+  }
+
+  static Future<RemoteControlLoginResult> mobileLogin(
+      String mobile, String captcha) async {
+    final response =
+        await http.post(Uri.parse('$server/api/remote/mobilelogin'),
+            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+            body: Uri(queryParameters: {
+              'mobile': mobile,
+              'captcha': captcha,
+            }).query);
+    return _parseLoginResult(_decode(response), mobile);
+  }
+
+  static RemoteControlLoginResult _parseLoginResult(
+      Map<String, dynamic> data, String fallbackName) {
     final rawUser = data['userinfo'];
     final member = data['member'];
     if (rawUser is! Map<String, dynamic> || member is! Map<String, dynamic>) {
@@ -94,7 +119,7 @@ class RemoteControlApi {
       throw RemoteControlApiException('Login response contains no token');
     }
     final user = <String, dynamic>{
-      'name': (rawUser['username'] ?? account).toString(),
+      'name': (rawUser['username'] ?? fallbackName).toString(),
       'display_name': (rawUser['nickname'] ?? '').toString(),
       'avatar': (rawUser['avatar'] ?? '').toString(),
       'status': 1,

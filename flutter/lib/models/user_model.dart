@@ -248,6 +248,29 @@ class UserModel {
     return getLoginResponseFromAuthBody(body);
   }
 
+  Future<void> sendRemoteControlSms(String mobile) async {
+    try {
+      await RemoteControlApi.sendSms(mobile);
+    } on RemoteControlApiException catch (e) {
+      throw RequestException(0, e.message);
+    }
+  }
+
+  Future<LoginResponse> mobileLogin(String mobile, String captcha) async {
+    final RemoteControlLoginResult result;
+    try {
+      result = await RemoteControlApi.mobileLogin(mobile, captcha);
+    } on RemoteControlApiException catch (e) {
+      throw RequestException(0, e.message);
+    }
+    final response = LoginResponse(
+        access_token: result.token,
+        type: HttpType.kAuthResTypeToken,
+        user: UserPayload.fromJson(result.user));
+    _parseAndUpdateUser(response.user!);
+    return response;
+  }
+
   LoginResponse getLoginResponseFromAuthBody(Map<String, dynamic> body) {
     final LoginResponse loginResponse;
     try {

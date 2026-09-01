@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_hbb/common/hbbs/hbbs.dart';
 import 'package:flutter_hbb/models/platform_model.dart';
+import 'package:flutter_hbb/models/remote_control_api.dart';
 import 'package:flutter_hbb/models/user_model.dart';
 import 'package:get/get.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -723,12 +724,19 @@ Future<bool?> _openLoginDialog() async {
   var username =
       TextEditingController(text: UserModel.getLocalUserInfo()?['name'] ?? '');
   var password = TextEditingController();
+  var mobile = TextEditingController();
+  var smsCode = TextEditingController();
   final userFocusNode = FocusNode()..requestFocus();
   Timer(Duration(milliseconds: 100), () => userFocusNode..requestFocus());
 
   String? usernameMsg;
   String? passwordMsg;
+  String? mobileMsg;
+  String? smsCodeMsg;
   var isInProgress = false;
+  var passwordLogin = false;
+  var smsCountdown = 0;
+  Timer? smsTimer;
   final oidcAuth = _OidcAuthController();
   final curOP = oidcAuth.curOP;
   // Track hover state for the close icon
@@ -750,7 +758,9 @@ Future<bool?> _openLoginDialog() async {
     }
   }
 
-  Future.delayed(Duration.zero, fetchLoginOptions);
+  if (!RemoteControlApi.isConfigured) {
+    Future.delayed(Duration.zero, fetchLoginOptions);
+  }
 
   final res = await gFFI.dialogManager.show<bool>((setState, close, context) {
     username.addListener(() {
@@ -765,8 +775,21 @@ Future<bool?> _openLoginDialog() async {
       }
     });
 
+    mobile.addListener(() {
+      if (mobileMsg != null) {
+        setState(() => mobileMsg = null);
+      }
+    });
+
+    smsCode.addListener(() {
+      if (smsCodeMsg != null) {
+        setState(() => smsCodeMsg = null);
+      }
+    });
+
     onDialogCancel() {
       isInProgress = false;
+      smsTimer?.cancel();
       close(false);
     }
 
@@ -855,6 +878,93 @@ Future<bool?> _openLoginDialog() async {
       curOP.value = '';
       setState(() => isInProgress = false);
     }
+
+    onSendSms() async {
+      if (isInProgress || smsCountdown > 0) return;
+      if (!RegExp(r'^1\d{10}$').hasMatch(mobile.text)) {
+        setState(() => mobileMsg = '请输入正确的手机号');
+        return;
+      }
+      setState(() => isInProgress = true);
+      try {
+        await gFFI.userModel.sendRemoteControlSms(mobile.text);
+        smsCountdown = 60;
+        smsTimer?.cancel();
+        smsTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+          setState(() {
+            smsCountdown--;
+            if (smsCountdown <= 0) timer.cancel();
+          });
+        });
+      } on RequestException catch (err) {
+        setState(() => mobileMsg = err.cause);
+      } catch (err) {
+        setState(() => mobileMsg = '发送失败: $err');
+      } finally {
+        setState(() => isInProgress = false);
+      }
+    }
+
+    onMobileLogin() async {
+      if (isInProgress) return;
+      if (!RegExp(r'^1\d{10}$').hasMatch(mobile.text)) {
+        setState(() => mobileMsg = '请输入正确的手机号');
+        return;
+      }
+      if (!RegExp(r'^[A-Za-z0-9]{4,6}$').hasMatch(smsCode.text)) {
+        setState(() => smsCodeMsg = '请输入正确的验证码');
+        return;
+      }
+      setState(() => isInProgress = true);
+      try {
+        final resp =
+            await gFFI.userModel.mobileLogin(mobile.text, smsCode.text);
+        await handleLoginResponse(resp, true, close);
+      } on RequestException catch (err) {
+        setState(() => smsCodeMsg = err.cause);
+      } catch (err) {
+        setState(() => smsCodeMsg = '登录失败: $err');
+      } finally {
+        setState(() => isInProgress = false);
+      }
+    }
+
+    mobileLoginWidget() => Column(
+          children: [
+            DialogTextField(
+              title: '手机号',
+              controller: mobile,
+              prefixIcon: const Icon(Icons.phone_android),
+              keyboardType: TextInputType.phone,
+              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              maxLength: 11,
+              errorText: mobileMsg,
+            ),
+            DialogTextField(
+              title: '短信验证码',
+              controller: smsCode,
+              prefixIcon: const Icon(Icons.verified_outlined),
+              keyboardType: TextInputType.number,
+              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              maxLength: 6,
+              errorText: smsCodeMsg,
+              suffixIcon: TextButton(
+                onPressed: isInProgress || smsCountdown > 0 ? null : onSendSms,
+                child: Text(smsCountdown > 0 ? '${smsCountdown}s' : '获取验证码'),
+              ),
+            ),
+            if (isInProgress) const LinearProgressIndicator(),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: 200,
+              height: 38,
+              child: ElevatedButton(
+                onPressed: isInProgress ? null : onMobileLogin,
+                child: const Text('登录 / 自动注册'),
+              ),
+            ),
+          ],
+        );
 
     thirdAuthWidget() => Obx(() {
           final error = loginOptionsError.value;
@@ -975,23 +1085,50 @@ Future<bool?> _openLoginDialog() async {
           const SizedBox(
             height: 8.0,
           ),
-          LoginWidgetUserPass(
-            username: username,
-            pass: password,
-            usernameMsg: usernameMsg,
-            passMsg: passwordMsg,
-            isInProgress: isInProgress,
-            curOP: curOP,
-            onLogin: onLogin,
-            userFocusNode: userFocusNode,
-          ),
-          thirdAuthWidget(),
+          if (RemoteControlApi.isConfigured) ...[
+            if (passwordLogin)
+              LoginWidgetUserPass(
+                username: username,
+                pass: password,
+                usernameMsg: usernameMsg,
+                passMsg: passwordMsg,
+                isInProgress: isInProgress,
+                curOP: curOP,
+                onLogin: onLogin,
+                userFocusNode: userFocusNode,
+              )
+            else
+              mobileLoginWidget(),
+            TextButton(
+              onPressed: isInProgress
+                  ? null
+                  : () => setState(() => passwordLogin = !passwordLogin),
+              child: Text(passwordLogin ? '手机验证码登录' : '账号密码登录'),
+            ),
+          ] else ...[
+            LoginWidgetUserPass(
+              username: username,
+              pass: password,
+              usernameMsg: usernameMsg,
+              passMsg: passwordMsg,
+              isInProgress: isInProgress,
+              curOP: curOP,
+              onLogin: onLogin,
+              userFocusNode: userFocusNode,
+            ),
+            thirdAuthWidget(),
+          ],
         ],
       ),
       onCancel: onDialogCancel,
-      onSubmit: onLogin,
+      onSubmit: RemoteControlApi.isConfigured && !passwordLogin
+          ? onMobileLogin
+          : onLogin,
     );
-  }).whenComplete(oidcAuth.close);
+  }).whenComplete(() {
+    smsTimer?.cancel();
+    oidcAuth.close();
+  });
 
   if (res != null) {
     await UserModel.updateOtherModels();

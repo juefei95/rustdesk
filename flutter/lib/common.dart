@@ -3658,9 +3658,6 @@ Future<bool> setServerConfig(
   await bind.mainSetOption(key: 'api-server', value: config.apiServer);
   await bind.mainSetOption(key: 'key', value: config.key);
   final newApiServer = await bind.mainGetApiServer();
-  if (oldApiServer != newApiServer) {
-    await RemoteControlApi.resetDiscovery();
-  }
   if (oldApiServer.isNotEmpty &&
       oldApiServer != newApiServer &&
       gFFI.userModel.isLogin) {

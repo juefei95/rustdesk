@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import '../config/remote_control_config.dart';
 import '../utils/http_service.dart' as http;
 import 'platform_model.dart';
 
@@ -26,11 +27,8 @@ class RemoteControlApi {
   static bool get isEnabled =>
       bind.mainGetLocalOption(key: _backendMarker) == 'Y';
 
-  static Future<void> resetDiscovery() =>
-      bind.mainSetLocalOption(key: _backendMarker, value: '');
-
-  static Future<String> _baseUrl() async =>
-      (await bind.mainGetApiServer()).replaceFirst(RegExp(r'/+$'), '');
+  static String get server =>
+      remoteControlApiServer.trim().replaceFirst(RegExp(r'/+$'), '');
 
   static Map<String, dynamic> _decode(http.Response response) {
     final body = jsonDecode(utf8.decode(response.bodyBytes));
@@ -53,7 +51,7 @@ class RemoteControlApi {
   }
 
   static Future<bool> discoverAndSyncConfig() async {
-    final baseUrl = await _baseUrl();
+    final baseUrl = server;
     if (baseUrl.isEmpty) return false;
     try {
       final response =
@@ -67,6 +65,8 @@ class RemoteControlApi {
           key: 'relay-server', value: (data['relay_server'] ?? '').toString());
       await bind.mainSetOption(
           key: 'key', value: (data['public_key'] ?? '').toString());
+      await bind.mainSetOption(
+          key: 'api-server', value: (data['api_server'] ?? '').toString());
       return true;
     } catch (_) {
       if (isEnabled) rethrow;
@@ -76,7 +76,7 @@ class RemoteControlApi {
 
   static Future<RemoteControlLoginResult> login(
       String account, String password) async {
-    final baseUrl = await _baseUrl();
+    final baseUrl = server;
     final response = await http.post(Uri.parse('$baseUrl/api/remote/login'),
         headers: {'Content-Type': 'application/x-www-form-urlencoded'},
         body: Uri(queryParameters: {
@@ -103,7 +103,7 @@ class RemoteControlApi {
   }
 
   static Future<bool> canControl() async {
-    final baseUrl = await _baseUrl();
+    final baseUrl = server;
     final token = bind.mainGetLocalOption(key: 'access_token');
     if (token.isEmpty) {
       throw RemoteControlApiException('请先登录');

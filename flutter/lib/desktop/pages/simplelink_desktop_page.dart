@@ -11,6 +11,7 @@ import 'package:flutter_hbb/desktop/pages/desktop_setting_page.dart';
 import 'package:flutter_hbb/models/peer_model.dart';
 import 'package:flutter_hbb/models/platform_model.dart';
 import 'package:get/get.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 import 'package:window_manager/window_manager.dart';
 
 class SimpleLinkDesktopPage extends StatefulWidget {
@@ -271,6 +272,7 @@ class _SimpleLinkLoginPage extends StatefulWidget {
 
 class _SimpleLinkLoginPageState extends State<_SimpleLinkLoginPage> {
   int _loginMode = 0;
+  bool _showPasswordLogin = false;
 
   @override
   Widget build(BuildContext context) {
@@ -306,8 +308,19 @@ class _SimpleLinkLoginPageState extends State<_SimpleLinkLoginPage> {
                               const SizedBox(height: 30),
                               _LoginPanel(
                                 selectedMode: _loginMode,
-                                onModeChanged: (mode) =>
-                                    setState(() => _loginMode = mode),
+                                showPasswordLogin: _showPasswordLogin,
+                                onModeChanged: (mode) => setState(() {
+                                  _loginMode = mode;
+                                  _showPasswordLogin = false;
+                                }),
+                                onTogglePasswordLogin: () => setState(() {
+                                  if (_showPasswordLogin) {
+                                    _loginMode = 0;
+                                    _showPasswordLogin = false;
+                                  } else {
+                                    _showPasswordLogin = true;
+                                  }
+                                }),
                               ),
                             ],
                           ),
@@ -399,126 +412,149 @@ class _LargeBrandIcon extends StatelessWidget {
 class _LoginPanel extends StatelessWidget {
   const _LoginPanel({
     required this.selectedMode,
+    required this.showPasswordLogin,
     required this.onModeChanged,
+    required this.onTogglePasswordLogin,
   });
+
+  final int selectedMode;
+  final bool showPasswordLogin;
+  final ValueChanged<int> onModeChanged;
+  final VoidCallback onTogglePasswordLogin;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 438,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Container(
+            padding: const EdgeInsets.fromLTRB(36, 26, 36, 34),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: const Color(0xFFE6EBF3)),
+              boxShadow: const [
+                BoxShadow(
+                  color: Color(0x1A15345F),
+                  blurRadius: 22,
+                  offset: Offset(0, 10),
+                ),
+              ],
+            ),
+            child: SizedBox(
+              height: 396,
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 180),
+                child: showPasswordLogin
+                    ? const _PasswordLoginContent(
+                        key: ValueKey('simplelink-password-login'),
+                      )
+                    : _TabbedLoginContent(
+                        key: const ValueKey('simplelink-tabbed-login'),
+                        selectedMode: selectedMode,
+                        onModeChanged: onModeChanged,
+                      ),
+              ),
+            ),
+          ),
+          Positioned(
+            left: 0,
+            top: 0,
+            child: _LoginModeCornerSwitch(
+              showPasswordLogin: showPasswordLogin,
+              onTap: onTogglePasswordLogin,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _LoginModeCornerSwitch extends StatelessWidget {
+  const _LoginModeCornerSwitch({
+    required this.showPasswordLogin,
+    required this.onTap,
+  });
+
+  final bool showPasswordLogin;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: showPasswordLogin ? '切换到微信登录' : '切换到用户名密码登录',
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: SizedBox(
+          width: 70,
+          height: 70,
+          child: Stack(
+            children: [
+              ClipPath(
+                clipper: const _LoginCornerClipper(),
+                child: Container(color: const Color(0xFF5B86F7)),
+              ),
+              Positioned(
+                left: 10,
+                top: 10,
+                child: Icon(
+                  showPasswordLogin
+                      ? Icons.qr_code_2_rounded
+                      : Icons.desktop_windows_outlined,
+                  color: Colors.white,
+                  size: 27,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _LoginCornerClipper extends CustomClipper<Path> {
+  const _LoginCornerClipper();
+
+  @override
+  Path getClip(Size size) {
+    return Path()
+      ..moveTo(0, 0)
+      ..lineTo(size.width, 0)
+      ..lineTo(0, size.height)
+      ..close();
+  }
+
+  @override
+  bool shouldReclip(covariant CustomClipper<Path> oldClipper) => false;
+}
+
+class _TabbedLoginContent extends StatelessWidget {
+  const _TabbedLoginContent({
+    Key? key,
+    required this.selectedMode,
+    required this.onModeChanged,
+  }) : super(key: key);
 
   final int selectedMode;
   final ValueChanged<int> onModeChanged;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: 438,
-      padding: const EdgeInsets.fromLTRB(36, 28, 36, 34),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: const Color(0xFFE6EBF3)),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x1A15345F),
-            blurRadius: 22,
-            offset: Offset(0, 10),
-          ),
-        ],
-      ),
-      child: Column(
-        children: [
-          _LoginModeTabs(
-            selectedMode: selectedMode,
-            onModeChanged: onModeChanged,
-          ),
-          const SizedBox(height: 30),
-          _LoginInput(
-            icon: Icons.phone_iphone_outlined,
-            hintText: selectedMode == 0 ? '手机号' : '手机号 / 邮箱',
-          ),
-          const SizedBox(height: 22),
-          Row(
-            children: [
-              Expanded(
-                child: _LoginInput(
-                  icon: selectedMode == 0
-                      ? Icons.verified_user_outlined
-                      : Icons.lock_outline,
-                  hintText: selectedMode == 0 ? '验证码' : '密码',
-                  obscureText: selectedMode == 1,
-                ),
-              ),
-              if (selectedMode == 0) ...[
-                const SizedBox(width: 14),
-                SizedBox(
-                  height: 50,
-                  width: 118,
-                  child: OutlinedButton(
-                    onPressed: () {},
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: const Color(0xFF1769FF),
-                      side: const BorderSide(color: Color(0xFFD8E3F5)),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                    ),
-                    child: const Text(
-                      '获取验证码',
-                      style: TextStyle(fontWeight: FontWeight.w600),
-                    ),
-                  ),
-                ),
-              ],
-            ],
-          ),
-          const SizedBox(height: 36),
-          SizedBox(
-            width: double.infinity,
-            height: 52,
-            child: ElevatedButton(
-              onPressed: loginDialog,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF1769FF),
-                foregroundColor: Colors.white,
-                elevation: 6,
-                shadowColor: const Color(0x4D1769FF),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(6),
-                ),
-              ),
-              child: const Text(
-                '登录',
-                style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
-              ),
-            ),
-          ),
-          const SizedBox(height: 26),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: const [
-              Text(
-                '注册账号',
-                style: TextStyle(
-                  color: Color(0xFF1769FF),
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-              SizedBox(width: 22),
-              SizedBox(
-                height: 18,
-                child: VerticalDivider(width: 1, color: Color(0xFFD6DCE8)),
-              ),
-              SizedBox(width: 22),
-              Text(
-                '忘记密码',
-                style: TextStyle(
-                  color: Color(0xFF1769FF),
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
+    return Column(
+      children: [
+        _LoginModeTabs(
+          selectedMode: selectedMode,
+          onModeChanged: onModeChanged,
+        ),
+        const SizedBox(height: 24),
+        if (selectedMode == 0) const _WechatLoginContent(),
+        if (selectedMode == 1) const _MobileLoginContent(),
+      ],
     );
   }
 }
@@ -538,13 +574,13 @@ class _LoginModeTabs extends StatelessWidget {
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         _LoginModeTab(
-          label: '手机号登录',
+          label: '微信扫码',
           selected: selectedMode == 0,
           onTap: () => onModeChanged(0),
         ),
         const SizedBox(width: 78),
         _LoginModeTab(
-          label: '密码登录',
+          label: '手机号登录',
           selected: selectedMode == 1,
           onTap: () => onModeChanged(1),
         ),
@@ -596,6 +632,221 @@ class _LoginModeTab extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _WechatLoginContent extends StatelessWidget {
+  const _WechatLoginContent({Key? key}) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        const Text(
+          '微信登录',
+          style: TextStyle(
+            color: Color(0xFF16213A),
+            fontSize: 22,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        const SizedBox(height: 14),
+        const Text(
+          '请使用微信扫码登录',
+          style: TextStyle(
+            color: Color(0xFF6F7888),
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        const SizedBox(height: 20),
+        Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(4),
+            border: Border.all(color: const Color(0xFFE6EBF3)),
+          ),
+          child: QrImageView(
+            data: 'https://www.rustdesk.com/',
+            version: QrVersions.auto,
+            size: 176,
+            gapless: false,
+          ),
+        ),
+        const SizedBox(height: 22),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: const [
+            SizedBox(
+              width: 16,
+              height: 16,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.all(Radius.circular(3)),
+                  border: Border.fromBorderSide(
+                    BorderSide(color: Color(0xFFB8C0CC)),
+                  ),
+                ),
+              ),
+            ),
+            SizedBox(width: 8),
+            Text(
+              '记住我的登录状态',
+              style: TextStyle(color: Color(0xFF6F7888), fontSize: 14),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _MobileLoginContent extends StatelessWidget {
+  const _MobileLoginContent({Key? key}) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        const _LoginInput(
+          icon: Icons.phone_iphone_outlined,
+          hintText: '手机号',
+        ),
+        const SizedBox(height: 22),
+        Row(
+          children: [
+            const Expanded(
+              child: _LoginInput(
+                icon: Icons.verified_user_outlined,
+                hintText: '验证码',
+              ),
+            ),
+            const SizedBox(width: 14),
+            SizedBox(
+              height: 50,
+              width: 118,
+              child: OutlinedButton(
+                onPressed: () {},
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: const Color(0xFF1769FF),
+                  side: const BorderSide(color: Color(0xFFD8E3F5)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                ),
+                child: const Text(
+                  '获取验证码',
+                  style: TextStyle(fontWeight: FontWeight.w600),
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 36),
+        SizedBox(
+          width: double.infinity,
+          height: 52,
+          child: ElevatedButton(
+            onPressed: loginDialog,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF1769FF),
+              foregroundColor: Colors.white,
+              elevation: 6,
+              shadowColor: const Color(0x4D1769FF),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(6),
+              ),
+            ),
+            child: const Text(
+              '登录',
+              style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _PasswordLoginContent extends StatelessWidget {
+  const _PasswordLoginContent({Key? key}) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        const SizedBox(height: 4),
+        const Text(
+          '密码登录',
+          style: TextStyle(
+            color: Color(0xFF16213A),
+            fontSize: 20,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        const SizedBox(height: 28),
+        const _LoginInput(
+          icon: Icons.person_outline,
+          hintText: '用户名',
+        ),
+        const SizedBox(height: 22),
+        const _LoginInput(
+          icon: Icons.lock_outline,
+          hintText: '密码',
+          obscureText: true,
+        ),
+        const SizedBox(height: 36),
+        SizedBox(
+          width: double.infinity,
+          height: 52,
+          child: ElevatedButton(
+            onPressed: loginDialog,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF1769FF),
+              foregroundColor: Colors.white,
+              elevation: 6,
+              shadowColor: const Color(0x4D1769FF),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(6),
+              ),
+            ),
+            child: const Text(
+              '登录',
+              style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
+            ),
+          ),
+        ),
+        const SizedBox(height: 26),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: const [
+            Text(
+              '注册账号',
+              style: TextStyle(
+                color: Color(0xFF1769FF),
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            SizedBox(width: 22),
+            SizedBox(
+              height: 18,
+              child: VerticalDivider(width: 1, color: Color(0xFFD6DCE8)),
+            ),
+            SizedBox(width: 22),
+            Text(
+              '忘记密码',
+              style: TextStyle(
+                color: Color(0xFF1769FF),
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+      ],
     );
   }
 }

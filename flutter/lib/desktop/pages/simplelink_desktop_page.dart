@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -10,8 +11,8 @@ import 'package:flutter_hbb/desktop/pages/desktop_home_page.dart';
 import 'package:flutter_hbb/desktop/pages/desktop_setting_page.dart';
 import 'package:flutter_hbb/models/peer_model.dart';
 import 'package:flutter_hbb/models/platform_model.dart';
+import 'package:flutter_hbb/models/remote_control_api.dart';
 import 'package:get/get.dart';
-import 'package:qr_flutter/qr_flutter.dart';
 import 'package:window_manager/window_manager.dart';
 
 class SimpleLinkDesktopPage extends StatefulWidget {
@@ -636,8 +637,118 @@ class _LoginModeTab extends StatelessWidget {
   }
 }
 
-class _WechatLoginContent extends StatelessWidget {
+class _WechatLoginContent extends StatefulWidget {
   const _WechatLoginContent({Key? key}) : super(key: key);
+
+  @override
+  State<_WechatLoginContent> createState() => _WechatLoginContentState();
+}
+
+class _WechatLoginContentState extends State<_WechatLoginContent> {
+  static const _pollInterval = Duration(seconds: 2);
+
+  Timer? _pollTimer;
+  String _scene = '';
+  String _qrUrl = '';
+  String _statusText = '正在获取二维码...';
+  String _errorText = '';
+  bool _loading = false;
+  bool _polling = false;
+  DateTime? _expiresAt;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadQrCode();
+  }
+
+  @override
+  void dispose() {
+    _pollTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _loadQrCode() async {
+    _pollTimer?.cancel();
+    setState(() {
+      _loading = true;
+      _scene = '';
+      _qrUrl = '';
+      _errorText = '';
+      _statusText = '正在获取二维码...';
+      _expiresAt = null;
+    });
+    try {
+      await RemoteControlApi.discoverAndSyncConfig();
+      if (!RemoteControlApi.isConfigured) {
+        throw RemoteControlApiException('请先配置 FastAdmin 会员系统地址');
+      }
+      final session = await RemoteControlApi.wechatQrLoginSession();
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _scene = session.scene;
+        _qrUrl = session.qrUrl;
+        _statusText = '请使用微信扫码登录';
+        _expiresAt = DateTime.now().add(Duration(seconds: session.expiresIn));
+      });
+      _pollTimer = Timer.periodic(_pollInterval, (_) => _pollLoginStatus());
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _statusText = '二维码获取失败';
+        _errorText = e.toString();
+      });
+    }
+  }
+
+  Future<void> _pollLoginStatus() async {
+    if (_scene.isEmpty || _polling) return;
+    final expiresAt = _expiresAt;
+    if (expiresAt != null && DateTime.now().isAfter(expiresAt)) {
+      _pollTimer?.cancel();
+      if (!mounted) return;
+      setState(() {
+        _statusText = '二维码已过期';
+        _errorText = '请刷新二维码后重新扫码';
+      });
+      return;
+    }
+    _polling = true;
+    try {
+      final result = await RemoteControlApi.queryWechatQrLogin(_scene);
+      if (result == null) {
+        if (!mounted) return;
+        setState(() {});
+        return;
+      }
+      _pollTimer?.cancel();
+      await gFFI.userModel.applyRemoteControlLoginResult(result);
+      if (!mounted) return;
+      setState(() {
+        _statusText = '登录成功';
+        _errorText = '';
+      });
+      showToast('微信登录成功');
+    } catch (e) {
+      _pollTimer?.cancel();
+      if (!mounted) return;
+      setState(() {
+        _statusText = '微信登录失败';
+        _errorText = e.toString();
+      });
+    } finally {
+      _polling = false;
+    }
+  }
+
+  int get _remainingSeconds {
+    final expiresAt = _expiresAt;
+    if (expiresAt == null) return 0;
+    final remaining = expiresAt.difference(DateTime.now()).inSeconds;
+    return remaining > 0 ? remaining : 0;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -652,10 +763,11 @@ class _WechatLoginContent extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 14),
-        const Text(
-          '请使用微信扫码登录',
+        Text(
+          _statusText,
           style: TextStyle(
-            color: Color(0xFF6F7888),
+            color:
+                _errorText.isEmpty ? const Color(0xFF6F7888) : Colors.redAccent,
             fontSize: 14,
             fontWeight: FontWeight.w500,
           ),
@@ -668,14 +780,18 @@ class _WechatLoginContent extends StatelessWidget {
             borderRadius: BorderRadius.circular(4),
             border: Border.all(color: const Color(0xFFE6EBF3)),
           ),
-          child: QrImageView(
-            data: 'https://www.rustdesk.com/',
-            version: QrVersions.auto,
-            size: 176,
-            gapless: false,
+          child: SizedBox(
+            width: 176,
+            height: 176,
+            child: _buildQrCode(),
           ),
         ),
-        const SizedBox(height: 22),
+        const SizedBox(height: 12),
+        SizedBox(
+          height: 34,
+          child: _buildLoginHint(),
+        ),
+        const SizedBox(height: 10),
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: const [
@@ -699,6 +815,57 @@ class _WechatLoginContent extends StatelessWidget {
           ],
         ),
       ],
+    );
+  }
+
+  Widget _buildQrCode() {
+    if (_loading && _qrUrl.isEmpty) {
+      return const Center(
+        child: SizedBox(
+          width: 28,
+          height: 28,
+          child: CircularProgressIndicator(strokeWidth: 2),
+        ),
+      );
+    }
+    if (_qrUrl.isEmpty) {
+      return Center(
+        child: IconButton(
+          tooltip: '刷新二维码',
+          icon: const Icon(Icons.refresh_rounded, color: Color(0xFF1769FF)),
+          onPressed: _loadQrCode,
+        ),
+      );
+    }
+    return Image.network(
+      _qrUrl,
+      fit: BoxFit.cover,
+      errorBuilder: (_, __, ___) {
+        return Center(
+          child: IconButton(
+            tooltip: '刷新二维码',
+            icon: const Icon(Icons.refresh_rounded, color: Color(0xFF1769FF)),
+            onPressed: _loadQrCode,
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildLoginHint() {
+    if (_errorText.isNotEmpty) {
+      return TextButton.icon(
+        onPressed: _loadQrCode,
+        icon: const Icon(Icons.refresh_rounded, size: 16),
+        label: const Text('刷新二维码'),
+      );
+    }
+    if (_qrUrl.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    return Text(
+      '二维码 ${_remainingSeconds}s 后过期',
+      style: const TextStyle(color: Color(0xFF8A94A6), fontSize: 13),
     );
   }
 }

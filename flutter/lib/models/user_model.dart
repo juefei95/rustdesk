@@ -271,6 +271,13 @@ class UserModel {
     return response;
   }
 
+  Future<void> applyRemoteControlLoginResult(
+      RemoteControlLoginResult result) async {
+    await bind.mainSetLocalOption(key: 'access_token', value: result.token);
+    _parseAndUpdateUser(UserPayload.fromJson(result.user));
+    await updateOtherModels();
+  }
+
   LoginResponse getLoginResponseFromAuthBody(Map<String, dynamic> body) {
     final LoginResponse loginResponse;
     try {

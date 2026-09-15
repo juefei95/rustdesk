@@ -23,6 +23,18 @@ class RemoteControlLoginResult {
   final bool canControl;
 }
 
+class WechatQrLoginSession {
+  WechatQrLoginSession({
+    required this.scene,
+    required this.qrUrl,
+    required this.expiresIn,
+  });
+
+  final String scene;
+  final String qrUrl;
+  final int expiresIn;
+}
+
 class RemoteControlApi {
   static bool get isConfigured => server.isNotEmpty;
 
@@ -107,6 +119,41 @@ class RemoteControlApi {
     return _parseLoginResult(_decode(response), mobile);
   }
 
+  static Future<WechatQrLoginSession> wechatQrLoginSession() async {
+    final response = await http.get(
+        Uri.parse('$server/addons/wechatqrcodelogin/index/loginqrcode'));
+    final data = _decode(response);
+    final scene = (data['scene'] ?? '').toString();
+    final qrUrl = (data['qr_url'] ?? '').toString();
+    final expiresIn =
+        int.tryParse((data['expires_in'] ?? '').toString()) ?? 300;
+    if (scene.isEmpty || qrUrl.isEmpty) {
+      throw RemoteControlApiException('Invalid WeChat QR login response');
+    }
+    return WechatQrLoginSession(
+      scene: scene,
+      qrUrl: qrUrl,
+      expiresIn: expiresIn,
+    );
+  }
+
+  static Future<RemoteControlLoginResult?> queryWechatQrLogin(
+      String scene) async {
+    final uri =
+        Uri.parse('$server/addons/wechatqrcodelogin/index/loginstatus')
+            .replace(queryParameters: {'scene': scene});
+    final response = await http.get(uri);
+    final data = _decode(response);
+    final status = (data['status'] ?? '').toString();
+    if (status == 'pending' || status == 'authorized') {
+      return null;
+    }
+    if (status != 'logged_in') {
+      throw RemoteControlApiException('Unexpected WeChat login status');
+    }
+    return _parseWechatLoginResult(data);
+  }
+
   static RemoteControlLoginResult _parseLoginResult(
       Map<String, dynamic> data, String fallbackName) {
     final rawUser = data['userinfo'];
@@ -125,6 +172,37 @@ class RemoteControlApi {
       'status': 1,
     };
     return RemoteControlLoginResult(token, user, member['can_control'] == true);
+  }
+
+  static RemoteControlLoginResult _parseWechatLoginResult(
+      Map<String, dynamic> data) {
+    final rawUser = data['userinfo'];
+    if (rawUser is! Map<String, dynamic>) {
+      throw RemoteControlApiException('Invalid WeChat login response');
+    }
+    final token = (rawUser['token'] ??
+            rawUser['access_token'] ??
+            rawUser['accessToken'] ??
+            data['token'] ??
+            '')
+        .toString();
+    if (token.isEmpty) {
+      throw RemoteControlApiException('WeChat login response contains no token');
+    }
+    final fallbackName = (rawUser['mobile'] ?? rawUser['id'] ?? 'wechat')
+        .toString();
+    final user = <String, dynamic>{
+      'name': (rawUser['username'] ?? rawUser['name'] ?? fallbackName)
+          .toString(),
+      'display_name':
+          (rawUser['nickname'] ?? rawUser['display_name'] ?? '').toString(),
+      'avatar': (rawUser['avatar'] ?? '').toString(),
+      'status': 1,
+    };
+    final member = data['member'];
+    final canControl =
+        member is Map<String, dynamic> ? member['can_control'] == true : true;
+    return RemoteControlLoginResult(token, user, canControl);
   }
 
   static Future<bool> canControl() async {

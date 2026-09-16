@@ -37,12 +37,18 @@ class _SimpleLinkDesktopPageState extends State<SimpleLinkDesktopPage>
 
   int _selectedPage = 0;
   bool _showLoginPage = false;
+  bool _allowDestroyOnClose = false;
 
   @override
   void initState() {
     super.initState();
     windowManager.addListener(this);
     unawaited(_ensureTrayIcon());
+    Future.delayed(const Duration(seconds: 2), () {
+      if (mounted) {
+        _allowDestroyOnClose = true;
+      }
+    });
     _trayChannel.setMethodCallHandler((call) async {
       if (call.method == 'openSettings') {
         await windowManager.show();
@@ -82,7 +88,8 @@ class _SimpleLinkDesktopPageState extends State<SimpleLinkDesktopPage>
 
   @override
   void onWindowClose() async {
-    if (bind.mainGetLocalOption(key: _simpleLinkCloseToTrayOption) == 'N') {
+    if (_allowDestroyOnClose &&
+        bind.mainGetLocalOption(key: _simpleLinkCloseToTrayOption) == 'N') {
       await windowManager.setPreventClose(false);
       await windowManager.destroy();
       return;
@@ -126,7 +133,7 @@ class _SimpleLinkDesktopPageState extends State<SimpleLinkDesktopPage>
                               onOpenDevices: () => _selectPage(1),
                             ),
                             const _DeviceListPage(),
-                            const _MembershipPage(),
+                            _MembershipPage(onLogin: _openLoginPage),
                             const _SimpleLinkSettingsPage(),
                             // Keeps the existing main-window lifecycle active while
                             // the commercial pages replace its visible interface.
@@ -167,8 +174,8 @@ class _SimpleLinkDesktopPageState extends State<SimpleLinkDesktopPage>
             onTap: () => _selectPage(1),
           ),
           _NavigationItem(
-            icon: Icons.workspace_premium_outlined,
-            selectedIcon: Icons.workspace_premium_rounded,
+            icon: Icons.card_membership_outlined,
+            selectedIcon: Icons.card_membership_rounded,
             label: '会员中心',
             selected: _selectedPage == 2,
             onTap: () => _selectPage(2),
@@ -297,7 +304,13 @@ class _AccountMenuButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return PopupMenuButton<_AccountMenuAction>(
       tooltip: '账号菜单',
-      offset: const Offset(0, 36),
+      offset: const Offset(0, 40),
+      color: Colors.white,
+      elevation: 8,
+      constraints: const BoxConstraints(minWidth: 188),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(14),
+      ),
       onSelected: (action) {
         switch (action) {
           case _AccountMenuAction.profile:
@@ -308,46 +321,141 @@ class _AccountMenuButton extends StatelessWidget {
             break;
         }
       },
-      itemBuilder: (context) => const [
+      itemBuilder: (context) => [
         PopupMenuItem(
+          enabled: false,
+          padding: const EdgeInsets.fromLTRB(10, 10, 10, 4),
+          child: _AccountMenuHeader(userName: userName),
+        ),
+        const PopupMenuItem(
           value: _AccountMenuAction.profile,
-          child: ListTile(
-            dense: true,
-            leading: Icon(Icons.person_outline),
-            title: Text('个人信息'),
+          height: 40,
+          padding: EdgeInsets.symmetric(horizontal: 16),
+          child: Text(
+            '个人信息',
+            style: TextStyle(
+              color: Color(0xFF334155),
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+            ),
           ),
         ),
-        PopupMenuDivider(),
-        PopupMenuItem(
+        const PopupMenuItem(
           value: _AccountMenuAction.logout,
-          child: ListTile(
-            dense: true,
-            leading: Icon(Icons.logout_rounded),
-            title: Text('退出登录'),
+          height: 40,
+          padding: EdgeInsets.symmetric(horizontal: 16),
+          child: Text(
+            '退出登录',
+            style: TextStyle(
+              color: Color(0xFFE5484D),
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+            ),
           ),
         ),
       ],
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            CircleAvatar(
-              radius: 13,
-              backgroundColor: _SimpleLinkDesktopPageState._brandColor
-                  .withOpacity(0.12),
-              child: const Icon(
-                Icons.person,
-                color: _SimpleLinkDesktopPageState._brandColor,
-                size: 15,
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+        child: Container(
+          height: 36,
+          padding: const EdgeInsets.fromLTRB(8, 0, 10, 0),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: const Color(0xFFDDE7F5)),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CircleAvatar(
+                radius: 13,
+                backgroundColor: const Color(0xFFFFE8B7),
+                child: const Icon(
+                  Icons.person,
+                  color: Color(0xFF111827),
+                  size: 15,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                userName,
+                style: const TextStyle(
+                  color: Color(0xFF111827),
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(width: 4),
+              const Icon(
+                Icons.keyboard_arrow_up_rounded,
+                color: Color(0xFF64748B),
+                size: 16,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AccountMenuHeader extends StatelessWidget {
+  const _AccountMenuHeader({required this.userName});
+
+  final String userName;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF5F8FC),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        children: [
+          const CircleAvatar(
+            radius: 18,
+            backgroundColor: Color(0xFF2F80ED),
+            child: Text(
+              '用',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 14,
+                fontWeight: FontWeight.w800,
               ),
             ),
-            const SizedBox(width: 8),
-            Text(userName),
-            const SizedBox(width: 4),
-            const Icon(Icons.keyboard_arrow_down_rounded, size: 18),
-          ],
-        ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  userName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Color(0xFF111827),
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                const Text(
+                  '微信已登录',
+                  style: TextStyle(
+                    color: Color(0xFF7A8798),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -2547,47 +2655,86 @@ String _platformLabel(String platform) {
 }
 
 class _MembershipPage extends StatelessWidget {
-  const _MembershipPage();
+  const _MembershipPage({required this.onLogin});
+
+  final VoidCallback onLogin;
 
   @override
   Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
-      child: Center(
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(28, 24, 28, 18),
+      child: Align(
+        alignment: Alignment.topCenter,
         child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 900),
+          constraints: const BoxConstraints(maxWidth: 1180),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               _buildAccountCard(context),
               const SizedBox(height: 18),
-              Wrap(
-                spacing: 18,
-                runSpacing: 18,
+              const Text(
+                '选择会员套餐',
+                style: TextStyle(
+                  color: Color(0xFF111827),
+                  fontSize: 24,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 4),
+              const Text(
+                '开通会员，畅享稳定高效的远程控制体验',
+                style: TextStyle(
+                  color: Color(0xFF667085),
+                  fontSize: 15,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              const SizedBox(height: 18),
+              const Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: _PlanCard(
+                      days: '1天',
+                      price: '¥0.99',
+                      subtitle: '临时应急',
+                    ),
+                  ),
+                  SizedBox(width: 16),
+                  Expanded(
+                    child: _PlanCard(
+                      days: '7天',
+                      price: '¥2.99',
+                      subtitle: '短期使用',
+                    ),
+                  ),
+                  SizedBox(width: 16),
+                  Expanded(
+                    child: _PlanCard(
+                      days: '30天',
+                      price: '¥6.99',
+                      subtitle: '长期使用、主推',
+                      recommended: true,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 34),
+              Row(
                 children: const [
-                  _PlanCard(
-                    name: '个人版',
-                    price: '¥99 / 年',
-                    features: [
-                      '无限远程连接',
-                      '文件传输',
-                      '高清画质',
-                      '手机控制电脑',
-                      '多设备管理',
-                    ],
-                    highlighted: true,
+                  Expanded(child: Divider(color: Color(0xFFCBD5E1))),
+                  Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 18),
+                    child: Text(
+                      '简单连接，让远程更高效',
+                      style: TextStyle(
+                        color: Color(0xFF8492A6),
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
                   ),
-                  _PlanCard(
-                    name: '企业版',
-                    price: '¥2999 / 年起',
-                    features: [
-                      '企业账号',
-                      '多设备管理',
-                      '连接日志',
-                      '专属技术支持',
-                      '权限与组织管理',
-                    ],
-                  ),
+                  Expanded(child: Divider(color: Color(0xFFCBD5E1))),
                 ],
               ),
             ],
@@ -2601,43 +2748,79 @@ class _MembershipPage extends StatelessWidget {
     return Obx(() {
       final userName = gFFI.userModel.userName.value;
       final isLoggedIn = userName.isNotEmpty;
-      return Card(
-        elevation: 0,
-        shape: RoundedRectangleBorder(
+      return Container(
+        height: 92,
+        decoration: BoxDecoration(
+          color: Colors.white,
           borderRadius: BorderRadius.circular(14),
-          side: BorderSide(color: Theme.of(context).dividerColor),
+          border: Border.all(color: const Color(0xFFD8DEE9)),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x08000000),
+              blurRadius: 18,
+              offset: Offset(0, 8),
+            ),
+          ],
         ),
         child: Padding(
-          padding: const EdgeInsets.all(22),
+          padding: const EdgeInsets.symmetric(horizontal: 26),
           child: Row(
             children: [
               const CircleAvatar(
-                radius: 27,
+                radius: 28,
                 backgroundColor: Color(0xFFEAF2FF),
                 child: Icon(Icons.person, color: Color(0xFF1769FF), size: 30),
               ),
-              const SizedBox(width: 16),
+              const SizedBox(width: 18),
               Expanded(
                 child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       isLoggedIn
                           ? gFFI.userModel.displayNameOrUserName
-                          : translate('Account'),
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w600,
-                          ),
+                          : '账户',
+                      style: const TextStyle(
+                        color: Color(0xFF111827),
+                        fontSize: 20,
+                        fontWeight: FontWeight.w800,
+                      ),
                     ),
                     const SizedBox(height: 4),
-                    Text(isLoggedIn ? '当前套餐：免费版' : '登录后同步设备与会员权益'),
+                    Text(
+                      isLoggedIn ? '当前套餐：免费版' : '登录后同步设备与会员权益',
+                      style: const TextStyle(
+                        color: Color(0xFF344054),
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
                   ],
                 ),
               ),
               if (!isLoggedIn)
-                ElevatedButton(
-                  onPressed: loginDialog,
-                  child: Text(translate('Login')),
+                SizedBox(
+                  width: 86,
+                  height: 38,
+                  child: ElevatedButton(
+                    onPressed: onLogin,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF1769FF),
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                    child: const Text(
+                      '登录',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
                 ),
             ],
           ),
@@ -2935,86 +3118,178 @@ class _SettingsActionRow extends StatelessWidget {
 
 class _PlanCard extends StatelessWidget {
   const _PlanCard({
-    required this.name,
+    required this.days,
     required this.price,
-    required this.features,
-    this.highlighted = false,
+    required this.subtitle,
+    this.recommended = false,
   });
 
-  final String name;
+  final String days;
   final String price;
-  final List<String> features;
-  final bool highlighted;
+  final String subtitle;
+  final bool recommended;
 
   @override
   Widget build(BuildContext context) {
     const brandColor = Color(0xFF1769FF);
-    return SizedBox(
-      width: 360,
-      child: Card(
-        elevation: 0,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(14),
-          side: BorderSide(
-            color: highlighted ? brandColor : Theme.of(context).dividerColor,
-            width: highlighted ? 1.5 : 1,
-          ),
+    const features = ['远程连接', '文件传输', '高清画质', '多设备使用'];
+    return Container(
+      height: 350,
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        color: recommended ? const Color(0xFFF7FBFF) : Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: recommended ? brandColor : const Color(0xFFDDE5F0),
+          width: recommended ? 2 : 1,
         ),
-        child: Padding(
-          padding: const EdgeInsets.all(22),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Icon(
-                    Icons.workspace_premium_rounded,
-                    color: highlighted ? const Color(0xFFFFA53D) : brandColor,
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x08000000),
+            blurRadius: 18,
+            offset: Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Stack(
+        children: [
+          if (recommended)
+            Positioned(
+              top: 0,
+              right: 0,
+              child: Container(
+                width: 72,
+                height: 36,
+                alignment: Alignment.center,
+                decoration: const BoxDecoration(
+                  color: brandColor,
+                  borderRadius: BorderRadius.only(
+                    bottomLeft: Radius.circular(10),
                   ),
-                  const SizedBox(width: 9),
-                  Text(
-                    name,
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.w700,
-                        ),
+                ),
+                child: const Text(
+                  '推荐',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w800,
                   ),
-                ],
+                ),
               ),
-              const SizedBox(height: 12),
-              Text(
-                price,
-                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+            ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(24, 24, 24, 22),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Icon(
+                      Icons.calendar_month_rounded,
                       color: brandColor,
-                      fontWeight: FontWeight.w700,
+                      size: 24,
                     ),
-              ),
-              const SizedBox(height: 18),
-              for (final feature in features)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 11),
-                  child: Row(
-                    children: [
-                      const Icon(
-                        Icons.check_circle_rounded,
-                        color: brandColor,
-                        size: 18,
+                    const SizedBox(width: 14),
+                    Text(
+                      days,
+                      style: const TextStyle(
+                        color: Color(0xFF111827),
+                        fontSize: 24,
+                        fontWeight: FontWeight.w800,
                       ),
-                      const SizedBox(width: 9),
-                      Expanded(child: Text(feature)),
-                    ],
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  price,
+                  style: const TextStyle(
+                    color: brandColor,
+                    fontSize: 34,
+                    fontWeight: FontWeight.w900,
                   ),
                 ),
-              const SizedBox(height: 6),
-              SizedBox(
-                width: double.infinity,
-                child: OutlinedButton(
-                  onPressed: null,
-                  child: const Text('支付接入后开放'),
+                const SizedBox(height: 4),
+                Text(
+                  subtitle,
+                  style: const TextStyle(
+                    color: Color(0xFF4B5563),
+                    fontSize: 17,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
-              ),
-            ],
+                const SizedBox(height: 14),
+                const Divider(color: Color(0xFFDDE5F0), height: 1),
+                const SizedBox(height: 10),
+                for (final feature in features)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Row(
+                      children: [
+                        const Icon(
+                          Icons.check_circle_rounded,
+                          color: brandColor,
+                          size: 20,
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            feature,
+                            style: const TextStyle(
+                              color: Color(0xFF344054),
+                              fontSize: 15,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                const Spacer(),
+                SizedBox(
+                  width: double.infinity,
+                  height: 40,
+                  child: recommended
+                      ? ElevatedButton(
+                          onPressed: () => showToast('支付功能暂未接入'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: brandColor,
+                            foregroundColor: Colors.white,
+                            elevation: 0,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                          ),
+                          child: const Text(
+                            '立即开通',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        )
+                      : OutlinedButton(
+                          onPressed: () => showToast('支付功能暂未接入'),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: brandColor,
+                            side: const BorderSide(color: Color(0xFF94BFFF)),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                          ),
+                          child: const Text(
+                            '立即开通',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                ),
+              ],
+            ),
           ),
-        ),
+        ],
       ),
     );
   }

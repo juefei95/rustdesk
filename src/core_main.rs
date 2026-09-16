@@ -824,15 +824,29 @@ fn core_main_invoke_new_connection(mut args: std::env::Args) -> Option<Vec<Strin
 
     #[cfg(windows)]
     {
+        use std::os::windows::ffi::OsStrExt;
         use winapi::um::winuser::WM_USER;
-        let res = crate::platform::send_message_to_hnwd(
-            &crate::platform::FLUTTER_RUNNER_WIN32_WINDOW_CLASS,
-            &crate::get_app_name(),
-            (WM_USER + 2) as _, // referred from unilinks desktop pub
-            uni_links.as_str(),
-            false,
-        );
-        return if res { None } else { Some(Vec::new()) };
+        let window = crate::platform::windows::find_main_window();
+        if window.is_null() {
+            return Some(Vec::new());
+        }
+        let mut data_struct = winapi::um::winuser::COPYDATASTRUCT::default();
+        data_struct.dwData = (WM_USER + 2) as _; // 对应 uni_links_desktop 使用的消息编号。作者: zzh，时间: 2026-09-16
+        let mut data = std::ffi::OsStr::new(&uni_links)
+            .encode_wide()
+            .chain(Some(0))
+            .collect::<Vec<_>>();
+        data_struct.cbData = (data.len() * std::mem::size_of::<u16>()) as _;
+        data_struct.lpData = data.as_mut_ptr() as _;
+        unsafe {
+            winapi::um::winuser::SendMessageW(
+                window,
+                winapi::um::winuser::WM_COPYDATA,
+                0,
+                &data_struct as *const _ as _,
+            );
+        }
+        return None;
     }
     #[cfg(target_os = "macos")]
     {

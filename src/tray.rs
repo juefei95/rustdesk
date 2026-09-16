@@ -131,7 +131,6 @@ fn make_tray() -> hbb_common::ResultType<()> {
         start_query_session_count(ipc_sender.clone());
     });
     #[cfg(windows)]
-    let mut last_click = std::time::Instant::now();
     #[cfg(target_os = "macos")]
     {
         use tao::platform::macos::EventLoopExtMacOS;
@@ -139,7 +138,7 @@ fn make_tray() -> hbb_common::ResultType<()> {
     }
     event_loop.run(move |event, _, control_flow| {
         *control_flow = ControlFlow::WaitUntil(
-            std::time::Instant::now() + std::time::Duration::from_millis(100),
+            std::time::Instant::now() + std::time::Duration::from_millis(20),
         );
 
         if let tao::event::Event::NewEvents(tao::event::StartCause::Init) = event {
@@ -220,11 +219,7 @@ fn make_tray() -> hbb_common::ResultType<()> {
                     if button == tray_icon::MouseButton::Left
                         && button_state == tray_icon::MouseButtonState::Up
                     {
-                        if last_click.elapsed() < std::time::Duration::from_secs(1) {
-                            return;
-                        }
                         open_func();
-                        last_click = std::time::Instant::now();
                     }
                 }
                 _ => {}

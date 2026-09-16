@@ -96,4 +96,7 @@ class Win32Window {
   HWND child_content_ = nullptr;
 };
 
+// 通过稳定的内部标记查找正在运行的主窗口。作者: zzh，时间: 2026-09-16
+HWND findMainWindow();
+
 #endif  // RUNNER_WIN32_WINDOW_H_

@@ -52,6 +52,7 @@ namespace {
 constexpr UINT_PTR kForceRedrawTimerId = 0xFB15;
 constexpr UINT kTrayActionMessage = WM_APP + 0x51;
 constexpr WPARAM kTrayActionOpenSettings = 1;
+constexpr WPARAM kTrayActionOpenMain = 2;
 constexpr UINT kForceRedrawIntervalMs = 200;
 // Give up eventually (with a log), so a genuinely stuck engine doesn't keep a
 // timer alive forever. 25 * 200ms covers slow starts comfortably.
@@ -177,12 +178,20 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
                               WPARAM const wparam,
                               LPARAM const lparam) noexcept {
   if (message == kTrayActionMessage) {
-    if (wparam == kTrayActionOpenSettings && flutter_controller_) {
-      flutter::MethodChannel<> tray_channel(
-          flutter_controller_->engine()->messenger(),
-          "org.rustdesk.rustdesk/tray",
-          &flutter::StandardMethodCodec::GetInstance());
-      tray_channel.InvokeMethod("openSettings", nullptr);
+    if (wparam == kTrayActionOpenMain || wparam == kTrayActionOpenSettings) {
+      ShowWindow(hwnd, SW_RESTORE);
+      BringWindowToTop(hwnd);
+      SetForegroundWindow(hwnd);
+      if (flutter_controller_) {
+        ForceChildRefresh(flutter_controller_->view()->GetNativeWindow());
+      }
+      if (wparam == kTrayActionOpenSettings && flutter_controller_) {
+        flutter::MethodChannel<> tray_channel(
+            flutter_controller_->engine()->messenger(),
+            "org.rustdesk.rustdesk/tray",
+            &flutter::StandardMethodCodec::GetInstance());
+        tray_channel.InvokeMethod("openSettings", nullptr);
+      }
     }
     return 0;
   }

@@ -116,6 +116,10 @@ use installer_shell::{
 pub const FLUTTER_RUNNER_WIN32_WINDOW_CLASS: &'static str = "FLUTTER_RUNNER_WIN32_WINDOW"; // main window, install window
 pub const EXPLORER_EXE: &'static str = "explorer.exe";
 pub const SET_FOREGROUND_WINDOW: &'static str = "SET_FOREGROUND_WINDOW";
+const WINDOWS_SERVICE_NAME: &str = "DianLianService";
+const WINDOWS_SERVICE_DISPLAY_NAME: &str = "点连远程助手服务";
+const WINDOWS_FIREWALL_RULE_NAME: &str = "DianLianService";
+const WINDOWS_EXE_NAME: &str = "dianlian.exe";
 
 const REG_NAME_INSTALL_DESKTOPSHORTCUTS: &str = "DESKTOPSHORTCUTS";
 const REG_NAME_INSTALL_STARTMENUSHORTCUTS: &str = "STARTMENUSHORTCUTS";
@@ -556,7 +560,7 @@ fn service_main(arguments: Vec<OsString>) {
 
 pub fn start_os_service() {
     if let Err(e) =
-        windows_service::service_dispatcher::start(crate::get_app_name(), ffi_service_main)
+        windows_service::service_dispatcher::start(WINDOWS_SERVICE_NAME, ffi_service_main)
     {
         log::error!("start_service failed: {}", e);
     }
@@ -677,7 +681,7 @@ async fn run_service(_arguments: Vec<OsString>) -> ResultType<()> {
     };
 
     // Register system service event handler
-    let status_handle = service_control_handler::register(crate::get_app_name(), event_handler)?;
+    let status_handle = service_control_handler::register(WINDOWS_SERVICE_NAME, event_handler)?;
 
     let next_status = ServiceStatus {
         // Should match the one from system service registry
@@ -1460,7 +1464,7 @@ fn get_install_info_with_subkey(subkey: String) -> (String, String, String, Stri
         "%ProgramData%\\Microsoft\\Windows\\Start Menu\\Programs\\{}",
         crate::get_app_name()
     );
-    let exe = format!("{}\\{}.exe", path, crate::get_app_name());
+    let exe = format!("{}\\{}", path, WINDOWS_EXE_NAME);
     (subkey, path, start_menu, exe)
 }
 
@@ -1496,13 +1500,12 @@ pub fn rename_exe_cmd(src_exe: &str, path: &str) -> ResultType<String> {
         .ok_or(anyhow!("Can't get file name of {src_exe}"))?
         .to_string_lossy()
         .to_string();
-    let app_name = crate::get_app_name().to_lowercase();
-    if src_exe_filename.to_lowercase() == format!("{app_name}.exe") {
+    if src_exe_filename.eq_ignore_ascii_case(WINDOWS_EXE_NAME) {
         Ok("".to_owned())
     } else {
         Ok(format!(
             "
-        move /Y \"{path}\\{src_exe_filename}\" \"{path}\\{app_name}.exe\"
+        move /Y \"{path}\\{src_exe_filename}\" \"{path}\\{WINDOWS_EXE_NAME}\"
         ",
         ))
     }
@@ -1576,11 +1579,14 @@ fn get_after_install(
     reg add HKEY_CLASSES_ROOT\\{ext}\\shell\\open /f
     reg add HKEY_CLASSES_ROOT\\{ext}\\shell\\open\\command /f
     reg add HKEY_CLASSES_ROOT\\{ext}\\shell\\open\\command /f /ve /t REG_SZ /d \"\\\"{nested_exe}\\\" \\\"%%1\\\"\"
-    netsh advfirewall firewall add rule name=\"{app_name} Service\" dir=out action=allow program=\"{exe}\" enable=yes
-    netsh advfirewall firewall add rule name=\"{app_name} Service\" dir=in action=allow program=\"{exe}\" enable=yes
+    netsh advfirewall firewall add rule name=\"{firewall_rule_name}\" dir=out action=allow program=\"{exe}\" enable=yes
+    netsh advfirewall firewall add rule name=\"{firewall_rule_name}\" dir=in action=allow program=\"{exe}\" enable=yes
     {create_service}
     reg add HKEY_LOCAL_MACHINE\\Software\\Microsoft\\Windows\\CurrentVersion\\Policies\\System /f /v SoftwareSASGeneration /t REG_DWORD /d 1
-    ", create_service=get_create_service(&exe))
+    ",
+        create_service = get_create_service(&exe),
+        firewall_rule_name = WINDOWS_FIREWALL_RULE_NAME,
+    )
 }
 
 pub fn install_me(options: &str, path: String, silent: bool, debug: bool) -> ResultType<()> {
@@ -1797,15 +1803,18 @@ fn get_before_uninstall(kill_self: bool) -> String {
     format!(
         "
     chcp 65001
-    sc stop {app_name}
-    sc delete {app_name}
+    sc stop {service_name}
+    sc delete {service_name}
     taskkill /F /IM {broker_exe}
-    taskkill /F /IM {app_name}.exe{filter}
+    taskkill /F /IM {exe_name}{filter}
     reg delete HKEY_CLASSES_ROOT\\.{ext} /f
     reg delete HKEY_CLASSES_ROOT\\{ext} /f
-    netsh advfirewall firewall delete rule name=\"{app_name} Service\"
-    ",
+    netsh advfirewall firewall delete rule name=\"{firewall_rule_name}\"
+        ",
         broker_exe = WIN_TOPMOST_INJECTED_PROCESS_EXE,
+        service_name = WINDOWS_SERVICE_NAME,
+        exe_name = WINDOWS_EXE_NAME,
+        firewall_rule_name = WINDOWS_FIREWALL_RULE_NAME,
     )
 }
 
@@ -2320,6 +2329,7 @@ pub fn quit_gui() {
 
 const TRAY_ACTION_MESSAGE: UINT = WM_APP + 0x51;
 const TRAY_ACTION_OPEN_SETTINGS: WPARAM = 1;
+const TRAY_ACTION_OPEN_MAIN: WPARAM = 2;
 
 fn current_exe_name() -> String {
     std::env::current_exe()
@@ -2331,40 +2341,28 @@ fn current_exe_name() -> String {
         .unwrap_or_else(|| format!("{}.exe", crate::get_app_name()))
 }
 
-fn find_main_window() -> HWND {
-    unsafe {
-        let class_name = wide_string(FLUTTER_RUNNER_WIN32_WINDOW_CLASS);
-        let title = wide_string(&crate::get_app_name());
-        let window = FindWindowW(class_name.as_ptr(), title.as_ptr());
-        if !window.is_null() {
-            let mut process_id = 0;
-            GetWindowThreadProcessId(window, &mut process_id);
-            if get_session_id_of_process(process_id) == get_current_process_session_id() {
-                return window;
-            }
-        }
+pub fn find_main_window() -> HWND {
+    const MAIN_WINDOW_PROP: &str = "DIANLIAN_MAIN_WINDOW";
 
+    unsafe {
         struct Context {
-            session_id: u32,
+            session_id: Option<u32>,
             window: HWND,
         }
 
         unsafe extern "system" fn enum_window(hwnd: HWND, lparam: LPARAM) -> BOOL {
             let context = &mut *(lparam as *mut Context);
-            let mut class_name = [0u16; 64];
-            let class_name_len =
-                GetClassNameW(hwnd, class_name.as_mut_ptr(), class_name.len() as _);
-            if class_name_len == 0
-                || String::from_utf16_lossy(&class_name[..class_name_len as usize])
-                    != FLUTTER_RUNNER_WIN32_WINDOW_CLASS
-            {
+            let prop_name = wide_string(MAIN_WINDOW_PROP);
+            let handle = GetPropW(hwnd, prop_name.as_ptr());
+            if handle.is_null() {
                 return TRUE;
             }
 
             let mut process_id = 0;
             GetWindowThreadProcessId(hwnd, &mut process_id);
-            if get_session_id_of_process(process_id) != context.session_id {
-                return TRUE;
+            match (get_session_id_of_process(process_id), context.session_id) {
+                (Some(sid), Some(cur_sid)) if sid == cur_sid => {}
+                _ => return TRUE,
             }
 
             context.window = hwnd;
@@ -2377,7 +2375,6 @@ fn find_main_window() -> HWND {
         };
         EnumWindows(Some(enum_window), &mut context as *mut Context as LPARAM);
         if !context.window.is_null() {
-            log::debug!("Restoring Flutter window found by class-name fallback");
             context.window
         } else {
             null_mut()
@@ -2391,9 +2388,7 @@ pub fn restore_main_window() -> bool {
         return false;
     }
     unsafe {
-        ShowWindow(window, SW_RESTORE);
-        BringWindowToTop(window);
-        SetForegroundWindow(window);
+        PostMessageW(window, TRAY_ACTION_MESSAGE, TRAY_ACTION_OPEN_MAIN, 0);
     }
     true
 }
@@ -3417,14 +3412,16 @@ pub fn uninstall_service(show_new_window: bool, _: bool) -> bool {
     let cmds = format!(
         "
     chcp 65001
-    sc stop {app_name}
-    sc delete {app_name}
+    sc stop {service_name}
+    sc delete {service_name}
     if exist \"%PROGRAMDATA%\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\{app_name} Tray.lnk\" del /f /q \"%PROGRAMDATA%\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\{app_name} Tray.lnk\"
     taskkill /F /IM {broker_exe}
-    taskkill /F /IM {app_name}.exe{filter}
+    taskkill /F /IM {exe_name}{filter}
     ",
         app_name = crate::get_app_name(),
         broker_exe = WIN_TOPMOST_INJECTED_PROCESS_EXE,
+        service_name = WINDOWS_SERVICE_NAME,
+        exe_name = WINDOWS_EXE_NAME,
     );
     if let Err(err) = run_cmds(cmds, false, "uninstall") {
         Config::set_option("stop-service".into(), "".into());
@@ -3540,7 +3537,7 @@ pub fn update_me(debug: bool) -> ResultType<()> {
     let is_msi = is_msi_installed().ok();
     let reg_msi_key = get_reg_msi_key(&subkey, is_msi)?;
 
-    let app_exe_name = &format!("{}.exe", &app_name);
+    let app_exe_name = WINDOWS_EXE_NAME;
     // NOTE: The pids below are matched by command line, which can silently come
     // back empty even while the processes are running:
     // - a 32-bit build cannot read the command line of a 64-bit process, so it
@@ -3678,8 +3675,8 @@ reg add {subkey} /f /v EstimatedSize /t REG_DWORD /d {size}
     let cmds = format!(
         "
 chcp 65001
-sc stop {app_name}
-taskkill /F /IM {app_name}.exe{filter}
+sc stop {service_name}
+taskkill /F /IM {exe_name}{filter}
 {reg_cmd}
 {copy_exe}
 {rename_exe}
@@ -3689,7 +3686,8 @@ taskkill /F /IM {app_name}.exe{filter}
 {install_printer_cmd}
 {sleep}
     ",
-        app_name = app_name,
+        service_name = WINDOWS_SERVICE_NAME,
+        exe_name = WINDOWS_EXE_NAME,
         copy_exe = copy_exe_cmd(&src_exe, &exe, &path)?,
         rename_exe = rename_exe_cmd(&src_exe, &path)?,
         remove_meta_toml = remove_meta_toml_cmd(is_msi.unwrap_or(true), &path),
@@ -4050,18 +4048,21 @@ fn get_import_config(exe: &str) -> String {
     if config::is_outgoing_only() {
         return "".to_string();
     }
+    let service_name = WINDOWS_SERVICE_NAME;
+    let service_display_name = WINDOWS_SERVICE_DISPLAY_NAME;
     let exe = escape_nested_cmd_ampersands(exe);
     let config_path = Config::file();
     let config_path = escape_nested_cmd_ampersands(config_path.to_str().unwrap_or(""));
     format!("
-sc stop {app_name}
-sc delete {app_name}
-sc create {app_name} binpath= \"\\\"{exe}\\\" --import-config \\\"{config_path}\\\"\" start= auto DisplayName= \"{app_name} Service\"
-sc start {app_name}
-sc stop {app_name}
-sc delete {app_name}
+sc stop {service_name}
+sc delete {service_name}
+sc create {service_name} binpath= \"\\\"{exe}\\\" --import-config \\\"{config_path}\\\"\" start= auto DisplayName= \"{service_display_name}\"
+sc start {service_name}
+sc stop {service_name}
+sc delete {service_name}
 ",
-    app_name = crate::get_app_name(),
+    service_name = service_name,
+    service_display_name = service_display_name,
 )
 }
 
@@ -4075,12 +4076,17 @@ fn get_create_service(exe: &str) -> String {
 if exist \"%PROGRAMDATA%\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\{app_name} Tray.lnk\" del /f /q \"%PROGRAMDATA%\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\{app_name} Tray.lnk\"
 ", app_name = crate::get_app_name())
     } else {
+        let service_name = WINDOWS_SERVICE_NAME;
+        let service_display_name = WINDOWS_SERVICE_DISPLAY_NAME;
         let exe = escape_nested_cmd_ampersands(exe);
-        format!("
-sc create {app_name} binpath= \"\\\"{exe}\\\" --service\" start= auto DisplayName= \"{app_name} Service\"
-sc start {app_name}
+        format!(
+            "
+sc create {service_name} binpath= \"\\\"{exe}\\\" --service\" start= auto DisplayName= \"{service_display_name}\"
+sc start {service_name}
 ",
-    app_name = crate::get_app_name())
+            service_name = service_name,
+            service_display_name = service_display_name
+        )
     }
 }
 
@@ -4289,7 +4295,7 @@ fn get_uninstall_amyuni_idd() -> String {
 
 #[inline]
 pub fn is_self_service_running() -> bool {
-    is_service_running(&crate::get_app_name())
+    is_service_running(WINDOWS_SERVICE_NAME)
 }
 
 pub fn is_service_running(service_name: &str) -> bool {

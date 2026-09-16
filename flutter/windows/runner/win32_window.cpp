@@ -336,3 +336,36 @@ void Win32Window::OnDestroy() {
 const wchar_t* getWindowClassName() {
   return kWindowClassName;
 }
+
+struct FindMainWindowContext {
+  DWORD session_id;
+  HWND result;
+};
+
+static BOOL CALLBACK enum_main_window_proc(HWND hwnd, LPARAM lparam) {
+  auto* context = reinterpret_cast<FindMainWindowContext*>(lparam);
+  if (GetProp(hwnd, L"DIANLIAN_MAIN_WINDOW") == nullptr) {
+    return TRUE;
+  }
+  DWORD pid = 0;
+  GetWindowThreadProcessId(hwnd, &pid);
+  if (pid == 0) {
+    return TRUE;
+  }
+  DWORD window_session_id = 0;
+  if (!ProcessIdToSessionId(pid, &window_session_id)) {
+    return TRUE;
+  }
+  if (window_session_id != context->session_id) {
+    return TRUE;
+  }
+  context->result = hwnd;
+  return FALSE;
+}
+
+HWND findMainWindow() {
+  FindMainWindowContext context = {0, nullptr};
+  ProcessIdToSessionId(GetCurrentProcessId(), &context.session_id);
+  EnumWindows(enum_main_window_proc, reinterpret_cast<LPARAM>(&context));
+  return context.result;
+}

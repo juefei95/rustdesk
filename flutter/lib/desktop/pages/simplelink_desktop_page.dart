@@ -40,6 +40,7 @@ class _SimpleLinkDesktopPageState extends State<SimpleLinkDesktopPage>
   void initState() {
     super.initState();
     windowManager.addListener(this);
+    unawaited(_ensureTrayIcon());
     _trayChannel.setMethodCallHandler((call) async {
       if (call.method == 'openSettings') {
         await windowManager.show();
@@ -368,7 +369,7 @@ class _LoginPageHeadline extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: const [
             Text(
-              '简连远程助手',
+              '点连远程助手',
               style: TextStyle(
                 color: Color(0xFF16213A),
                 fontSize: 38,
@@ -1437,7 +1438,7 @@ class _BrandMark extends StatelessWidget {
         ),
         const SizedBox(width: 8),
         Text(
-          '简连远程助手',
+          '点连远程助手',
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                 color: const Color(0xFF17213A),
                 fontWeight: FontWeight.w700,

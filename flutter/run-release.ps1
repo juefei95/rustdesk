@@ -169,10 +169,10 @@ function Stop-BuildOutputProcess {
     param([string[]]$BuildArguments)
 
     $BuildModeDirectory = Get-FlutterBuildModeDirectory $BuildArguments
-    $OutputExe = Join-Path $FlutterDirectory "build\windows\x64\runner\$BuildModeDirectory\rustdesk.exe"
+    $OutputExe = Join-Path $FlutterDirectory "build\windows\x64\runner\$BuildModeDirectory\dianlian.exe"
     $OutputExeFullPath = [System.IO.Path]::GetFullPath($OutputExe)
 
-    Get-Process -Name "rustdesk" -ErrorAction SilentlyContinue |
+    Get-Process -Name "dianlian" -ErrorAction SilentlyContinue |
         Where-Object {
             try {
                 $_.Path -and ([System.IO.Path]::GetFullPath($_.Path) -eq $OutputExeFullPath)
@@ -185,6 +185,13 @@ function Stop-BuildOutputProcess {
             Stop-Process -Id $_.Id -Force
             $_.WaitForExit()
         }
+}
+
+function Clear-StaleFlutterWindowsBuildCache {
+    & (Join-Path $FlutterDirectory "clear-stale-windows-build-cache.ps1")
+    if ($LASTEXITCODE -ne 0) {
+        Stop-ScriptWithExitCode $LASTEXITCODE "clear-stale-windows-build-cache.ps1 failed with exit code $LASTEXITCODE"
+    }
 }
 
 function New-DirectoryJunction {
@@ -328,6 +335,7 @@ Invoke-WithCargoManifestOverlay {
 
 Set-Location $FlutterDirectory
 Stop-BuildOutputProcess $ScriptArguments
+Clear-StaleFlutterWindowsBuildCache
 Invoke-CommandChecked flutter (@("build", "windows") + $ScriptArguments)
 } catch {
     if (-not $Script:RunPs1ExitCode) {

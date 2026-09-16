@@ -99,15 +99,17 @@ class _SimpleLinkDesktopPageState extends State<SimpleLinkDesktopPage>
                 const VerticalDivider(width: 1),
                 Expanded(
                   child: _showLoginPage
-                      ? const Stack(
+                      ? Stack(
                           children: [
-                            Offstage(
+                            const Offstage(
                               child: DesktopHomePage(
                                 key: ValueKey(
                                     'simplelink-login-main-window-lifecycle'),
                               ),
                             ),
-                            _SimpleLinkLoginPage(),
+                            _SimpleLinkLoginPage(
+                              onLoginSuccess: () => _selectPage(0),
+                            ),
                           ],
                         )
                       : IndexedStack(
@@ -203,22 +205,25 @@ class _SimpleLinkDesktopPageState extends State<SimpleLinkDesktopPage>
               Obx(() {
                 final userName = gFFI.userModel.userName.value;
                 final isLoggedIn = userName.isNotEmpty;
-                return TextButton.icon(
-                  onPressed: isLoggedIn ? () => _selectPage(2) : _openLoginPage,
-                  icon: CircleAvatar(
-                    radius: 13,
-                    backgroundColor: _brandColor.withOpacity(0.12),
-                    child: Icon(
-                      isLoggedIn ? Icons.person : Icons.login,
-                      color: _brandColor,
-                      size: 15,
+                if (!isLoggedIn) {
+                  return TextButton.icon(
+                    onPressed: _openLoginPage,
+                    icon: CircleAvatar(
+                      radius: 13,
+                      backgroundColor: _brandColor.withOpacity(0.12),
+                      child: const Icon(
+                        Icons.login,
+                        color: _brandColor,
+                        size: 15,
+                      ),
                     ),
-                  ),
-                  label: Text(
-                    isLoggedIn
-                        ? gFFI.userModel.displayNameOrUserName
-                        : translate('Login'),
-                  ),
+                    label: Text(translate('Login')),
+                  );
+                }
+                return _AccountMenuButton(
+                  userName: gFFI.userModel.displayNameOrUserName,
+                  onProfile: () => _selectPage(2),
+                  onLogout: logOutConfirmDialog,
                 );
               }),
             const SizedBox(width: 6),
@@ -268,8 +273,88 @@ class _SimpleLinkDesktopPageState extends State<SimpleLinkDesktopPage>
   }
 }
 
+enum _AccountMenuAction {
+  profile,
+  logout,
+}
+
+class _AccountMenuButton extends StatelessWidget {
+  const _AccountMenuButton({
+    required this.userName,
+    required this.onProfile,
+    required this.onLogout,
+  });
+
+  final String userName;
+  final VoidCallback onProfile;
+  final VoidCallback onLogout;
+
+  @override
+  Widget build(BuildContext context) {
+    return PopupMenuButton<_AccountMenuAction>(
+      tooltip: '账号菜单',
+      offset: const Offset(0, 36),
+      onSelected: (action) {
+        switch (action) {
+          case _AccountMenuAction.profile:
+            onProfile();
+            break;
+          case _AccountMenuAction.logout:
+            onLogout();
+            break;
+        }
+      },
+      itemBuilder: (context) => const [
+        PopupMenuItem(
+          value: _AccountMenuAction.profile,
+          child: ListTile(
+            dense: true,
+            leading: Icon(Icons.person_outline),
+            title: Text('个人信息'),
+          ),
+        ),
+        PopupMenuDivider(),
+        PopupMenuItem(
+          value: _AccountMenuAction.logout,
+          child: ListTile(
+            dense: true,
+            leading: Icon(Icons.logout_rounded),
+            title: Text('退出登录'),
+          ),
+        ),
+      ],
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CircleAvatar(
+              radius: 13,
+              backgroundColor: _SimpleLinkDesktopPageState._brandColor
+                  .withOpacity(0.12),
+              child: const Icon(
+                Icons.person,
+                color: _SimpleLinkDesktopPageState._brandColor,
+                size: 15,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Text(userName),
+            const SizedBox(width: 4),
+            const Icon(Icons.keyboard_arrow_down_rounded, size: 18),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _SimpleLinkLoginPage extends StatefulWidget {
-  const _SimpleLinkLoginPage();
+  const _SimpleLinkLoginPage({
+    required this.onLoginSuccess,
+  });
+
+  final VoidCallback onLoginSuccess;
 
   @override
   State<_SimpleLinkLoginPage> createState() => _SimpleLinkLoginPageState();
@@ -325,6 +410,7 @@ class _SimpleLinkLoginPageState extends State<_SimpleLinkLoginPage> {
                                     _LoginPanel(
                                       selectedMode: _loginMode,
                                       showPasswordLogin: _showPasswordLogin,
+                                      onLoginSuccess: widget.onLoginSuccess,
                                       onModeChanged: (mode) => setState(() {
                                         _loginMode = mode;
                                         _showPasswordLogin = false;
@@ -436,12 +522,14 @@ class _LoginPanel extends StatelessWidget {
   const _LoginPanel({
     required this.selectedMode,
     required this.showPasswordLogin,
+    required this.onLoginSuccess,
     required this.onModeChanged,
     required this.onTogglePasswordLogin,
   });
 
   final int selectedMode;
   final bool showPasswordLogin;
+  final VoidCallback onLoginSuccess;
   final ValueChanged<int> onModeChanged;
   final VoidCallback onTogglePasswordLogin;
 
@@ -471,12 +559,14 @@ class _LoginPanel extends StatelessWidget {
               child: AnimatedSwitcher(
                 duration: const Duration(milliseconds: 180),
                 child: showPasswordLogin
-                    ? const _PasswordLoginContent(
+                    ? _PasswordLoginContent(
                         key: ValueKey('simplelink-password-login'),
+                        onLoginSuccess: onLoginSuccess,
                       )
                     : _TabbedLoginContent(
                         key: const ValueKey('simplelink-tabbed-login'),
                         selectedMode: selectedMode,
+                        onLoginSuccess: onLoginSuccess,
                         onModeChanged: onModeChanged,
                       ),
               ),
@@ -560,10 +650,12 @@ class _TabbedLoginContent extends StatelessWidget {
   const _TabbedLoginContent({
     Key? key,
     required this.selectedMode,
+    required this.onLoginSuccess,
     required this.onModeChanged,
   }) : super(key: key);
 
   final int selectedMode;
+  final VoidCallback onLoginSuccess;
   final ValueChanged<int> onModeChanged;
 
   @override
@@ -575,8 +667,10 @@ class _TabbedLoginContent extends StatelessWidget {
           onModeChanged: onModeChanged,
         ),
         const SizedBox(height: 24),
-        if (selectedMode == 0) const _WechatLoginContent(),
-        if (selectedMode == 1) const _MobileLoginContent(),
+        if (selectedMode == 0)
+          _WechatLoginContent(onLoginSuccess: onLoginSuccess),
+        if (selectedMode == 1)
+          _MobileLoginContent(onLoginSuccess: onLoginSuccess),
       ],
     );
   }
@@ -660,7 +754,12 @@ class _LoginModeTab extends StatelessWidget {
 }
 
 class _WechatLoginContent extends StatefulWidget {
-  const _WechatLoginContent({Key? key}) : super(key: key);
+  const _WechatLoginContent({
+    Key? key,
+    required this.onLoginSuccess,
+  }) : super(key: key);
+
+  final VoidCallback onLoginSuccess;
 
   @override
   State<_WechatLoginContent> createState() => _WechatLoginContentState();
@@ -753,6 +852,7 @@ class _WechatLoginContentState extends State<_WechatLoginContent> {
         _errorText = '';
       });
       showToast('微信登录成功');
+      widget.onLoginSuccess();
     } catch (e) {
       _pollTimer?.cancel();
       if (!mounted) return;
@@ -776,39 +876,30 @@ class _WechatLoginContentState extends State<_WechatLoginContent> {
   Widget build(BuildContext context) {
     return Column(
       children: [
-        const Text(
-          '微信登录',
-          style: TextStyle(
-            color: Color(0xFF16213A),
-            fontSize: 30,
-            fontWeight: FontWeight.w900,
-          ),
-        ),
-        const SizedBox(height: 12),
         Text(
           _statusText,
           style: TextStyle(
             color:
-                _errorText.isEmpty ? const Color(0xFF6F7888) : Colors.redAccent,
-            fontSize: 17,
-            fontWeight: FontWeight.w600,
+                _errorText.isEmpty ? const Color(0xFF16213A) : Colors.redAccent,
+            fontSize: 22,
+            fontWeight: FontWeight.w800,
           ),
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 18),
         Container(
-          padding: const EdgeInsets.all(10),
+          padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(4),
             border: Border.all(color: const Color(0xFFE6EBF3)),
           ),
           child: SizedBox(
-            width: 208,
-            height: 208,
+            width: 238,
+            height: 238,
             child: _buildQrCode(),
           ),
         ),
-        const SizedBox(height: 10),
+        const SizedBox(height: 12),
         SizedBox(
           height: 30,
           child: _buildLoginHint(),
@@ -896,7 +987,7 @@ class _WechatLoginContentState extends State<_WechatLoginContent> {
       return const SizedBox.shrink();
     }
     return Text(
-      '二维码 ${_remainingSeconds}s 后过期',
+      '二维码有效期倒计时 ${_remainingSeconds}秒',
       style: const TextStyle(
         color: Color(0xFF7B8494),
         fontSize: 15,
@@ -907,7 +998,19 @@ class _WechatLoginContentState extends State<_WechatLoginContent> {
 }
 
 class _MobileLoginContent extends StatelessWidget {
-  const _MobileLoginContent({Key? key}) : super(key: key);
+  const _MobileLoginContent({
+    Key? key,
+    required this.onLoginSuccess,
+  }) : super(key: key);
+
+  final VoidCallback onLoginSuccess;
+
+  Future<void> _openLoginDialog() async {
+    final result = await loginDialog();
+    if (result == true) {
+      onLoginSuccess();
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -952,7 +1055,7 @@ class _MobileLoginContent extends StatelessWidget {
           width: double.infinity,
           height: 58,
           child: ElevatedButton(
-            onPressed: loginDialog,
+            onPressed: _openLoginDialog,
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFF1769FF),
               foregroundColor: Colors.white,
@@ -974,7 +1077,19 @@ class _MobileLoginContent extends StatelessWidget {
 }
 
 class _PasswordLoginContent extends StatelessWidget {
-  const _PasswordLoginContent({Key? key}) : super(key: key);
+  const _PasswordLoginContent({
+    Key? key,
+    required this.onLoginSuccess,
+  }) : super(key: key);
+
+  final VoidCallback onLoginSuccess;
+
+  Future<void> _openLoginDialog() async {
+    final result = await loginDialog();
+    if (result == true) {
+      onLoginSuccess();
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1005,7 +1120,7 @@ class _PasswordLoginContent extends StatelessWidget {
           width: double.infinity,
           height: 58,
           child: ElevatedButton(
-            onPressed: loginDialog,
+            onPressed: _openLoginDialog,
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFF1769FF),
               foregroundColor: Colors.white,

@@ -219,7 +219,10 @@ pub fn core_main() -> Option<Vec<String>> {
         #[cfg(windows)]
         {
             use crate::platform;
-            if args[0] == "--uninstall" {
+            if args[0] == "--quit-all" {
+                crate::platform::windows::quit_all_user_processes();
+                return None;
+            } else if args[0] == "--uninstall" {
                 if let Err(err) = platform::uninstall_me(true) {
                     log::error!("Failed to uninstall: {}", err);
                 }

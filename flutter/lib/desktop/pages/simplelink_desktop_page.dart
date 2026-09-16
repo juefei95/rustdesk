@@ -86,12 +86,29 @@ class _SimpleLinkDesktopPageState extends State<SimpleLinkDesktopPage>
     }
   }
 
+  Future<void> _quitAllProcesses() async {
+    if (!Platform.isWindows) {
+      await windowManager.destroy();
+      return;
+    }
+    try {
+      await Process.start(
+        Platform.resolvedExecutable,
+        const ['--quit-all'],
+        mode: ProcessStartMode.detached,
+      );
+    } catch (err) {
+      debugPrint('Failed to quit all processes: $err');
+      await windowManager.setPreventClose(false);
+      await windowManager.destroy();
+    }
+  }
+
   @override
   void onWindowClose() async {
     if (_allowDestroyOnClose &&
         bind.mainGetLocalOption(key: _simpleLinkCloseToTrayOption) == 'N') {
-      await windowManager.setPreventClose(false);
-      await windowManager.destroy();
+      await _quitAllProcesses();
       return;
     }
     await _hideToTray();

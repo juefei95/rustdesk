@@ -16,7 +16,7 @@ typedef char** (*FUNC_RUSTDESK_CORE_MAIN)(int*);
 typedef void (*FUNC_RUSTDESK_FREE_ARGS)( char**, int);
 typedef int (*FUNC_RUSTDESK_IS_DISABLE_INSTALLATION)();
 /// Note: `--server`, `--service` are already handled in [core_main.rs].
-const std::vector<std::string> parameters_white_list = {"--install", "--cm", "--settings"};
+const std::vector<std::string> parameters_white_list = {"--install", "--cm", "--settings", "--quit-all"};
 
 const wchar_t* getWindowClassName();
 

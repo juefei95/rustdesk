@@ -199,13 +199,7 @@ class _SimpleLinkDesktopPageState extends State<SimpleLinkDesktopPage>
                 ),
               ),
             ),
-            if (loginPage)
-              _WindowActionButton(
-                tooltip: translate('Settings'),
-                icon: Icons.settings_outlined,
-                onPressed: () => _selectPage(3),
-              )
-            else
+            if (!loginPage)
               Obx(() {
                 final userName = gFFI.userModel.userName.value;
                 final isLoggedIn = userName.isNotEmpty;
@@ -301,54 +295,72 @@ class _SimpleLinkLoginPageState extends State<_SimpleLinkLoginPage> {
             ),
           ),
           Center(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(72, 48, 72, 28),
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 1080),
-                child: Column(
-                  children: [
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        Expanded(
-                          flex: 11,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final horizontalPadding =
+                    constraints.maxWidth < 900 ? 32.0 : 72.0;
+                return Padding(
+                  padding: EdgeInsets.fromLTRB(
+                    horizontalPadding,
+                    32,
+                    horizontalPadding,
+                    72,
+                  ),
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: SizedBox(
+                      width: 1000,
+                      child: Column(
+                        children: [
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.center,
                             children: [
-                              const _LoginPageHeadline(),
-                              const SizedBox(height: 30),
-                              _LoginPanel(
-                                selectedMode: _loginMode,
-                                showPasswordLogin: _showPasswordLogin,
-                                onModeChanged: (mode) => setState(() {
-                                  _loginMode = mode;
-                                  _showPasswordLogin = false;
-                                }),
-                                onTogglePasswordLogin: () => setState(() {
-                                  if (_showPasswordLogin) {
-                                    _loginMode = 0;
-                                    _showPasswordLogin = false;
-                                  } else {
-                                    _showPasswordLogin = true;
-                                  }
-                                }),
+                              Expanded(
+                                flex: 13,
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const _LoginPageHeadline(),
+                                    const SizedBox(height: 30),
+                                    _LoginPanel(
+                                      selectedMode: _loginMode,
+                                      showPasswordLogin: _showPasswordLogin,
+                                      onModeChanged: (mode) => setState(() {
+                                        _loginMode = mode;
+                                        _showPasswordLogin = false;
+                                      }),
+                                      onTogglePasswordLogin: () => setState(() {
+                                        if (_showPasswordLogin) {
+                                          _loginMode = 0;
+                                          _showPasswordLogin = false;
+                                        } else {
+                                          _showPasswordLogin = true;
+                                        }
+                                      }),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 42),
+                              const Expanded(
+                                flex: 7,
+                                child: _LoginBenefitsPanel(),
                               ),
                             ],
                           ),
-                        ),
-                        const SizedBox(width: 64),
-                        const Expanded(
-                          flex: 9,
-                          child: _LoginBenefitsPanel(),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
-                    const SizedBox(height: 46),
-                    const _LoginSecurityNote(),
-                  ],
-                ),
-              ),
+                  ),
+                );
+              },
             ),
+          ),
+          const Positioned(
+            left: 0,
+            right: 0,
+            bottom: 26,
+            child: _LoginSecurityNote(),
           ),
         ],
       ),
@@ -436,12 +448,12 @@ class _LoginPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      width: 438,
+      width: 500,
       child: Stack(
         clipBehavior: Clip.none,
         children: [
           Container(
-            padding: const EdgeInsets.fromLTRB(36, 26, 36, 34),
+            padding: const EdgeInsets.fromLTRB(44, 30, 44, 36),
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(10),
@@ -455,7 +467,7 @@ class _LoginPanel extends StatelessWidget {
               ],
             ),
             child: SizedBox(
-              height: 396,
+              height: 486,
               child: AnimatedSwitcher(
                 duration: const Duration(milliseconds: 180),
                 child: showPasswordLogin
@@ -589,7 +601,7 @@ class _LoginModeTabs extends StatelessWidget {
           selected: selectedMode == 0,
           onTap: () => onModeChanged(0),
         ),
-        const SizedBox(width: 78),
+        const SizedBox(width: 96),
         _LoginModeTab(
           label: '手机号登录',
           selected: selectedMode == 1,
@@ -617,7 +629,7 @@ class _LoginModeTab extends StatelessWidget {
       onTap: onTap,
       borderRadius: BorderRadius.circular(4),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 7),
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
         child: Column(
           children: [
             Text(
@@ -626,15 +638,15 @@ class _LoginModeTab extends StatelessWidget {
                 color: selected
                     ? const Color(0xFF1769FF)
                     : const Color(0xFF4E5869),
-                fontSize: 17,
-                fontWeight: FontWeight.w700,
+                fontSize: 21,
+                fontWeight: FontWeight.w800,
               ),
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 11),
             AnimatedContainer(
               duration: const Duration(milliseconds: 160),
-              width: selected ? 80 : 0,
-              height: 3,
+              width: selected ? 100 : 0,
+              height: 4,
               decoration: BoxDecoration(
                 color: selected ? const Color(0xFF1769FF) : Colors.transparent,
                 borderRadius: BorderRadius.circular(3),
@@ -768,21 +780,21 @@ class _WechatLoginContentState extends State<_WechatLoginContent> {
           '微信登录',
           style: TextStyle(
             color: Color(0xFF16213A),
-            fontSize: 22,
-            fontWeight: FontWeight.w800,
+            fontSize: 30,
+            fontWeight: FontWeight.w900,
           ),
         ),
-        const SizedBox(height: 14),
+        const SizedBox(height: 12),
         Text(
           _statusText,
           style: TextStyle(
             color:
                 _errorText.isEmpty ? const Color(0xFF6F7888) : Colors.redAccent,
-            fontSize: 14,
-            fontWeight: FontWeight.w500,
+            fontSize: 17,
+            fontWeight: FontWeight.w600,
           ),
         ),
-        const SizedBox(height: 20),
+        const SizedBox(height: 16),
         Container(
           padding: const EdgeInsets.all(10),
           decoration: BoxDecoration(
@@ -791,38 +803,45 @@ class _WechatLoginContentState extends State<_WechatLoginContent> {
             border: Border.all(color: const Color(0xFFE6EBF3)),
           ),
           child: SizedBox(
-            width: 176,
-            height: 176,
+            width: 208,
+            height: 208,
             child: _buildQrCode(),
           ),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 10),
         SizedBox(
-          height: 34,
+          height: 30,
           child: _buildLoginHint(),
         ),
-        const SizedBox(height: 10),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: const [
-            SizedBox(
-              width: 16,
-              height: 16,
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.all(Radius.circular(3)),
-                  border: Border.fromBorderSide(
-                    BorderSide(color: Color(0xFFB8C0CC)),
+        const SizedBox(height: 8),
+        SizedBox(
+          height: 20,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: const [
+              SizedBox(
+                width: 18,
+                height: 18,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.all(Radius.circular(3)),
+                    border: Border.fromBorderSide(
+                      BorderSide(color: Color(0xFFB8C0CC)),
+                    ),
                   ),
                 ),
               ),
-            ),
-            SizedBox(width: 8),
-            Text(
-              '记住我的登录状态',
-              style: TextStyle(color: Color(0xFF6F7888), fontSize: 14),
-            ),
-          ],
+              SizedBox(width: 8),
+              Text(
+                '记住我的登录状态',
+                style: TextStyle(
+                  color: Color(0xFF5F6978),
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
         ),
       ],
     );
@@ -866,8 +885,11 @@ class _WechatLoginContentState extends State<_WechatLoginContent> {
     if (_errorText.isNotEmpty) {
       return TextButton.icon(
         onPressed: _loadQrCode,
-        icon: const Icon(Icons.refresh_rounded, size: 16),
-        label: const Text('刷新二维码'),
+        icon: const Icon(Icons.refresh_rounded, size: 18),
+        label: const Text(
+          '刷新二维码',
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+        ),
       );
     }
     if (_qrUrl.isEmpty) {
@@ -875,7 +897,11 @@ class _WechatLoginContentState extends State<_WechatLoginContent> {
     }
     return Text(
       '二维码 ${_remainingSeconds}s 后过期',
-      style: const TextStyle(color: Color(0xFF8A94A6), fontSize: 13),
+      style: const TextStyle(
+        color: Color(0xFF7B8494),
+        fontSize: 15,
+        fontWeight: FontWeight.w600,
+      ),
     );
   }
 }
@@ -891,7 +917,7 @@ class _MobileLoginContent extends StatelessWidget {
           icon: Icons.phone_iphone_outlined,
           hintText: '手机号',
         ),
-        const SizedBox(height: 22),
+        const SizedBox(height: 24),
         Row(
           children: [
             const Expanded(
@@ -902,8 +928,8 @@ class _MobileLoginContent extends StatelessWidget {
             ),
             const SizedBox(width: 14),
             SizedBox(
-              height: 50,
-              width: 118,
+              height: 56,
+              width: 132,
               child: OutlinedButton(
                 onPressed: () {},
                 style: OutlinedButton.styleFrom(
@@ -915,16 +941,16 @@ class _MobileLoginContent extends StatelessWidget {
                 ),
                 child: const Text(
                   '获取验证码',
-                  style: TextStyle(fontWeight: FontWeight.w600),
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
                 ),
               ),
             ),
           ],
         ),
-        const SizedBox(height: 36),
+        const SizedBox(height: 38),
         SizedBox(
           width: double.infinity,
-          height: 52,
+          height: 58,
           child: ElevatedButton(
             onPressed: loginDialog,
             style: ElevatedButton.styleFrom(
@@ -938,7 +964,7 @@ class _MobileLoginContent extends StatelessWidget {
             ),
             child: const Text(
               '登录',
-              style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
+              style: TextStyle(fontSize: 19, fontWeight: FontWeight.w800),
             ),
           ),
         ),
@@ -959,25 +985,25 @@ class _PasswordLoginContent extends StatelessWidget {
           '密码登录',
           style: TextStyle(
             color: Color(0xFF16213A),
-            fontSize: 20,
-            fontWeight: FontWeight.w800,
+            fontSize: 28,
+            fontWeight: FontWeight.w900,
           ),
         ),
-        const SizedBox(height: 28),
+        const SizedBox(height: 30),
         const _LoginInput(
           icon: Icons.person_outline,
           hintText: '用户名',
         ),
-        const SizedBox(height: 22),
+        const SizedBox(height: 24),
         const _LoginInput(
           icon: Icons.lock_outline,
           hintText: '密码',
           obscureText: true,
         ),
-        const SizedBox(height: 36),
+        const SizedBox(height: 38),
         SizedBox(
           width: double.infinity,
-          height: 52,
+          height: 58,
           child: ElevatedButton(
             onPressed: loginDialog,
             style: ElevatedButton.styleFrom(
@@ -991,7 +1017,7 @@ class _PasswordLoginContent extends StatelessWidget {
             ),
             child: const Text(
               '登录',
-              style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
+              style: TextStyle(fontSize: 19, fontWeight: FontWeight.w800),
             ),
           ),
         ),
@@ -1003,8 +1029,8 @@ class _PasswordLoginContent extends StatelessWidget {
               '注册账号',
               style: TextStyle(
                 color: Color(0xFF1769FF),
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
               ),
             ),
             SizedBox(width: 22),
@@ -1017,8 +1043,8 @@ class _PasswordLoginContent extends StatelessWidget {
               '忘记密码',
               style: TextStyle(
                 color: Color(0xFF1769FF),
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
               ),
             ),
           ],
@@ -1042,21 +1068,21 @@ class _LoginInput extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 50,
+      height: 56,
       child: TextField(
         obscureText: obscureText,
-        style: const TextStyle(fontSize: 15),
+        style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
         decoration: InputDecoration(
           hintText: hintText,
           hintStyle: const TextStyle(
             color: Color(0xFFADB5C2),
-            fontSize: 16,
-            fontWeight: FontWeight.w500,
+            fontSize: 17,
+            fontWeight: FontWeight.w600,
           ),
-          prefixIcon: Icon(icon, color: const Color(0xFF7E8898), size: 20),
-          prefixIconConstraints: const BoxConstraints(minWidth: 48),
+          prefixIcon: Icon(icon, color: const Color(0xFF7E8898), size: 22),
+          prefixIconConstraints: const BoxConstraints(minWidth: 54),
           contentPadding:
-              const EdgeInsets.symmetric(horizontal: 14, vertical: 15),
+              const EdgeInsets.symmetric(horizontal: 16, vertical: 17),
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(6),
             borderSide: const BorderSide(color: Color(0xFFDDE3EC)),
@@ -1079,9 +1105,9 @@ class _LoginBenefitsPanel extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: const [
-        SizedBox(height: 26),
+        SizedBox(height: 14),
         _LoginDeviceIllustration(),
-        SizedBox(height: 26),
+        SizedBox(height: 18),
         _BenefitRow(
           icon: Icons.devices_outlined,
           iconColor: Color(0xFF1769FF),
@@ -1089,7 +1115,7 @@ class _LoginBenefitsPanel extends StatelessWidget {
           title: '手机/电脑都可远控',
           subtitle: '跨平台远程控制，随时随地高效协助',
         ),
-        SizedBox(height: 20),
+        SizedBox(height: 14),
         _BenefitRow(
           icon: Icons.inventory_2_outlined,
           iconColor: Color(0xFF1769FF),
@@ -1097,7 +1123,7 @@ class _LoginBenefitsPanel extends StatelessWidget {
           title: '设备管理',
           subtitle: '轻松管理设备，分组分类一目了然',
         ),
-        SizedBox(height: 20),
+        SizedBox(height: 14),
         _BenefitRow(
           icon: Icons.workspace_premium_outlined,
           iconColor: Color(0xFFFF9B2F),
@@ -1105,7 +1131,7 @@ class _LoginBenefitsPanel extends StatelessWidget {
           title: '会员订阅',
           subtitle: '灵活套餐选择，享受更多高级功能',
         ),
-        SizedBox(height: 20),
+        SizedBox(height: 14),
         _BenefitRow(
           icon: Icons.support_agent_outlined,
           iconColor: Color(0xFF1769FF),
@@ -1124,7 +1150,7 @@ class _LoginDeviceIllustration extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 210,
+      height: 150,
       child: CustomPaint(
         painter: _LoginDevicePainter(),
         child: const SizedBox.expand(),
@@ -1153,15 +1179,15 @@ class _BenefitRow extends StatelessWidget {
     return Row(
       children: [
         Container(
-          width: 54,
-          height: 54,
+          width: 44,
+          height: 44,
           decoration: BoxDecoration(
             color: backgroundColor,
             shape: BoxShape.circle,
           ),
-          child: Icon(icon, color: iconColor, size: 28),
+          child: Icon(icon, color: iconColor, size: 23),
         ),
-        const SizedBox(width: 18),
+        const SizedBox(width: 14),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -1170,16 +1196,16 @@ class _BenefitRow extends StatelessWidget {
                 title,
                 style: const TextStyle(
                   color: Color(0xFF273148),
-                  fontSize: 17,
+                  fontSize: 15,
                   fontWeight: FontWeight.w700,
                 ),
               ),
-              const SizedBox(height: 7),
+              const SizedBox(height: 5),
               Text(
                 subtitle,
                 style: const TextStyle(
                   color: Color(0xFF8A93A3),
-                  fontSize: 13,
+                  fontSize: 12,
                 ),
               ),
             ],

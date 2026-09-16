@@ -6,7 +6,7 @@
 
 | 文件 | 代码改动 | 对应功能 |
 | --- | --- | --- |
-| `src/tray.rs` | 托盘菜单、菜单事件和左键点击事件 | 增加“设置”“检查更新”“退出”；“打开”和左键点击统一恢复主窗口；退出改为结束用户进程。 |
+| `src/tray.rs` | 托盘菜单、菜单事件和左键点击事件 | 增加“设置”“退出”；“打开”和左键点击统一恢复主窗口；退出改为结束用户进程。 |
 | `src/platform/windows.rs` | `find_main_window`、`restore_main_window`、`open_main_window_settings`、`quit_all_user_processes` | 定位已有主窗口并恢复；发送打开设置消息；清理当前用户启动的相关进程。 |
 | `flutter/windows/runner/flutter_window.cpp` | `kTrayActionMessage` 和 `MessageHandler` | 接收 Rust 发送的 Windows 消息，并转发给 Flutter 的 MethodChannel。 |
 | `flutter/lib/desktop/pages/simplelink_desktop_page.dart` | `org.rustdesk.rustdesk/tray` 的监听 | 接收 `openSettings` 后显示窗口、获得焦点并打开基本设置页面。 |
@@ -24,13 +24,11 @@
 ```rust
 Open -> open_func
 Settings -> settings_func
-Check for updates -> update_func
 Exit -> quit_all_user_processes
 ```
 
 - `Open`：Windows 下优先调用 `restore_main_window()`；仅在没有找到主窗口时才调用 `run_me([])` 启动新实例。
 - `Settings`：优先调用 `open_main_window_settings()`；若主窗口不存在，则调用 `run_me(["--settings"])`。
-- `Check for updates`：Windows 下调用已有的 `updater::manually_check_update()`。
 - `Exit`：不再调用 `uninstall_service(false, false)`，改为调用 `quit_all_user_processes()`。因此不会触发服务卸载对应的 UAC 提权流程。
 
 ### 托盘左键行为

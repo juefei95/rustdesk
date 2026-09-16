@@ -66,9 +66,8 @@ fn make_tray() -> hbb_common::ResultType<()> {
     let quit_i = MenuItem::new(translate("Exit".to_owned()), true, None);
     let open_i = MenuItem::new(translate("Open".to_owned()), true, None);
     let settings_i = MenuItem::new(translate("Settings".to_owned()), true, None);
-    let update_i = MenuItem::new(translate("Check for updates".to_owned()), true, None);
     tray_menu
-        .append_items(&[&open_i, &settings_i, &update_i, &quit_i])
+        .append_items(&[&open_i, &settings_i, &quit_i])
         .ok();
     let tooltip = |count: usize| {
         if count == 0 {
@@ -123,17 +122,6 @@ fn make_tray() -> hbb_common::ResultType<()> {
         }
         crate::run_me(vec!["--settings"]).ok();
     };
-    let update_func = move || {
-        #[cfg(windows)]
-        {
-            if let Err(err) = crate::updater::manually_check_update() {
-                log::error!("Failed to check for updates: {err}");
-            }
-        }
-        #[cfg(not(windows))]
-        crate::run_me(vec!["--update"]).ok();
-    };
-
     #[cfg(windows)]
     std::thread::spawn(move || {
         start_query_session_count(ipc_sender.clone());
@@ -214,8 +202,6 @@ fn make_tray() -> hbb_common::ResultType<()> {
                 open_func();
             } else if event.id == settings_i.id() {
                 settings_func();
-            } else if event.id == update_i.id() {
-                update_func();
             }
         }
 

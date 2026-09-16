@@ -50,6 +50,8 @@ namespace {
 // This also relies on HandleTopLevelWindowProc not consuming WM_TIMER (no
 // plugin registers a delegate for it today).
 constexpr UINT_PTR kForceRedrawTimerId = 0xFB15;
+constexpr UINT kTrayActionMessage = WM_APP + 0x51;
+constexpr WPARAM kTrayActionOpenSettings = 1;
 constexpr UINT kForceRedrawIntervalMs = 200;
 // Give up eventually (with a log), so a genuinely stuck engine doesn't keep a
 // timer alive forever. 25 * 200ms covers slow starts comfortably.
@@ -174,6 +176,17 @@ LRESULT
 FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
                               WPARAM const wparam,
                               LPARAM const lparam) noexcept {
+  if (message == kTrayActionMessage) {
+    if (wparam == kTrayActionOpenSettings && flutter_controller_) {
+      flutter::MethodChannel<> tray_channel(
+          flutter_controller_->engine()->messenger(),
+          "org.rustdesk.rustdesk/tray",
+          &flutter::StandardMethodCodec::GetInstance());
+      tray_channel.InvokeMethod("openSettings", nullptr);
+    }
+    return 0;
+  }
+
   // Give Flutter, including plugins, an opportunity to handle window messages.
   if (flutter_controller_) {
     std::optional<LRESULT> result =
@@ -223,9 +236,8 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
       // A window created hidden (e.g. the connection manager) may be shown
       // long after the creation-time force-redraw timer has given up, and
       // FancyZones moves windows exactly when they are shown. Re-arm the
-      // protection if the first frame still hasn't been rendered by now (see
-      // kForceRedrawTimerId).
-      if (wparam == TRUE && !first_frame_rendered_ && flutter_controller_) {
+      // refresh protection whenever it becomes visible (see kForceRedrawTimerId).
+      if (wparam == TRUE && flutter_controller_) {
         force_redraw_tries_ = 0;
         SetTimer(hwnd, kForceRedrawTimerId, kForceRedrawIntervalMs, nullptr);
       }

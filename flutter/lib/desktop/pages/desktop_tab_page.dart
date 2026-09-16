@@ -14,10 +14,14 @@ import 'package:window_manager/window_manager.dart';
 import '../../common/shared_state.dart';
 
 class DesktopTabPage extends StatefulWidget {
-  const DesktopTabPage({Key? key}) : super(key: key);
+  const DesktopTabPage({Key? key, this.openSettingsOnStart = false})
+      : super(key: key);
+
+  final bool openSettingsOnStart;
 
   @override
-  State<DesktopTabPage> createState() => _DesktopTabPageState();
+  State<DesktopTabPage> createState() =>
+      _DesktopTabPageState(openSettingsOnStart: openSettingsOnStart);
 
   static void onAddSetting(
       {SettingsTabKey initialPage = SettingsTabKey.general}) {
@@ -41,7 +45,7 @@ class DesktopTabPage extends StatefulWidget {
 class _DesktopTabPageState extends State<DesktopTabPage> {
   final tabController = DesktopTabController(tabType: DesktopTabType.main);
 
-  _DesktopTabPageState() {
+  _DesktopTabPageState({required bool openSettingsOnStart}) {
     RemoteCountState.init();
     Get.put<DesktopTabController>(tabController);
     tabController.add(TabInfo(
@@ -58,6 +62,17 @@ class _DesktopTabPageState extends State<DesktopTabPage> {
                 key: const ValueKey(kTabLabelHomePage),
                 onOpenSettings: DesktopTabPage.onAddSetting,
               )));
+    if (openSettingsOnStart) {
+      tabController.add(TabInfo(
+          key: kTabLabelSettingPage,
+          label: kTabLabelSettingPage,
+          selectedIcon: Icons.build_sharp,
+          unselectedIcon: Icons.build_outlined,
+          page: DesktopSettingPage(
+            key: const ValueKey(kTabLabelSettingPage),
+            initialTabkey: SettingsTabKey.general,
+          )));
+    }
     if (bind.isIncomingOnly()) {
       tabController.onSelected = (key) {
         if (key == kTabLabelHomePage) {

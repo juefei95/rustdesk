@@ -141,7 +141,7 @@ void runMainApp(bool startService) async {
   }
   await Future.wait([gFFI.abModel.loadCache(), gFFI.groupModel.loadCache()]);
   gFFI.userModel.refreshCurrentUser();
-  runApp(App());
+  runApp(App(openSettingsOnStart: kBootArgs.contains('--settings')));
 
   bool? alwaysOnTop;
   if (isDesktop) {
@@ -426,6 +426,10 @@ WindowOptions getHiddenTitleBarWindowOptions(
 }
 
 class App extends StatefulWidget {
+  const App({Key? key, this.openSettingsOnStart = false}) : super(key: key);
+
+  final bool openSettingsOnStart;
+
   @override
   State<App> createState() => _AppState();
 }
@@ -509,7 +513,7 @@ class _AppState extends State<App> with WidgetsBindingObserver {
           darkTheme: MyTheme.darkTheme,
           themeMode: MyTheme.currentThemeMode(),
           home: isDesktop
-              ? const DesktopTabPage()
+              ? DesktopTabPage(openSettingsOnStart: widget.openSettingsOnStart)
               : isWeb
                   ? WebHomePage()
                   : HomePage(),

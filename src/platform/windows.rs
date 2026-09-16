@@ -2318,6 +2318,98 @@ pub fn quit_gui() {
     // unsafe { PostQuitMessage(0) }; // some how not work
 }
 
+const TRAY_ACTION_MESSAGE: UINT = WM_APP + 0x51;
+const TRAY_ACTION_OPEN_SETTINGS: WPARAM = 1;
+
+fn current_exe_name() -> String {
+    std::env::current_exe()
+        .ok()
+        .and_then(|path| {
+            path.file_name()
+                .map(|name| name.to_string_lossy().into_owned())
+        })
+        .unwrap_or_else(|| format!("{}.exe", crate::get_app_name()))
+}
+
+fn find_main_window() -> HWND {
+    unsafe {
+        let class_name = wide_string(FLUTTER_RUNNER_WIN32_WINDOW_CLASS);
+        let title = wide_string(&crate::get_app_name());
+        let window = FindWindowW(class_name.as_ptr(), title.as_ptr());
+        if window.is_null() {
+            return null_mut();
+        }
+        let mut process_id = 0;
+        GetWindowThreadProcessId(window, &mut process_id);
+        if get_session_id_of_process(process_id) == get_current_process_session_id() {
+            window
+        } else {
+            null_mut()
+        }
+    }
+}
+
+pub fn restore_main_window() -> bool {
+    let window = find_main_window();
+    if window.is_null() {
+        return false;
+    }
+    unsafe {
+        ShowWindow(window, SW_RESTORE);
+        BringWindowToTop(window);
+        SetForegroundWindow(window);
+    }
+    true
+}
+
+pub fn open_main_window_settings() -> bool {
+    let window = find_main_window();
+    if window.is_null() {
+        return false;
+    }
+    unsafe {
+        ShowWindow(window, SW_RESTORE);
+        BringWindowToTop(window);
+        SetForegroundWindow(window);
+        PostMessageW(window, TRAY_ACTION_MESSAGE, TRAY_ACTION_OPEN_SETTINGS, 0);
+    }
+    true
+}
+
+pub fn quit_all_user_processes() {
+    let app_exe_name = current_exe_name();
+    let current_pid = std::process::id();
+    let kill_pids = |pids: Vec<Pid>| {
+        let pids = pids
+            .into_iter()
+            .filter(|pid| pid.as_u32() != current_pid)
+            .collect::<Vec<_>>();
+        allow_err!(kill_process_by_pids(&app_exe_name, pids));
+    };
+
+    if let Err(err) = send_close(crate::POSTFIX_SERVICE) {
+        log::debug!("Failed to request RustDesk service exit: {err}");
+    }
+
+    kill_pids(crate::platform::get_pids_of_process_with_args::<_, &str>(
+        &app_exe_name,
+        &[],
+    ));
+    kill_pids(crate::platform::get_pids_of_process_with_args(
+        &app_exe_name,
+        &["--cm"],
+    ));
+    kill_pids(crate::platform::get_pids_of_process_with_args(
+        &app_exe_name,
+        &["--server"],
+    ));
+    kill_pids(crate::platform::get_pids_of_process_with_args(
+        &app_exe_name,
+        &["--tray"],
+    ));
+    std::process::exit(0);
+}
+
 pub fn get_user_token(session_id: u32, as_user: bool) -> HANDLE {
     let mut token = NULL as HANDLE;
     unsafe {

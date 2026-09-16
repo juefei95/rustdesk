@@ -63,22 +63,13 @@ fn make_tray() -> hbb_common::ResultType<()> {
     let mut event_loop = EventLoopBuilder::new().build();
 
     let tray_menu = Menu::new();
-    let hide_stop_service = crate::ui_interface::get_builtin_option(
-        hbb_common::config::keys::OPTION_HIDE_STOP_SERVICE,
-    ) == "Y";
-    // The tray icon is only shown when the service is running, so we don't need to check
-    // the `stop-service` option here.
-    let quit_i = if !hide_stop_service {
-        Some(MenuItem::new(translate("Stop service".to_owned()), true, None))
-    } else {
-        None
-    };
+    let quit_i = MenuItem::new(translate("Exit".to_owned()), true, None);
     let open_i = MenuItem::new(translate("Open".to_owned()), true, None);
-    if let Some(quit_i) = &quit_i {
-        tray_menu.append_items(&[&open_i, quit_i]).ok();
-    } else {
-        tray_menu.append_items(&[&open_i]).ok();
-    }
+    let settings_i = MenuItem::new(translate("Settings".to_owned()), true, None);
+    let update_i = MenuItem::new(translate("Check for updates".to_owned()), true, None);
+    tray_menu
+        .append_items(&[&open_i, &settings_i, &update_i, &quit_i])
+        .ok();
     let tooltip = |count: usize| {
         if count == 0 {
             format!(
@@ -111,11 +102,9 @@ fn make_tray() -> hbb_common::ResultType<()> {
         crate::platform::macos::handle_application_should_open_untitled_file();
         #[cfg(target_os = "windows")]
         {
-            // Do not use "start uni link" way, it may not work on some Windows, and pop out error
-            // dialog, I found on one user's desktop, but no idea why, Windows is shit.
-            // Use `run_me` instead.
-            // `allow_multiple_instances` in `flutter/windows/runner/main.cpp` allows only one instance without args.
-            crate::run_me::<&str>(vec![]).ok();
+            if !crate::platform::windows::restore_main_window() {
+                crate::run_me::<&str>(vec![]).ok();
+            }
         }
         #[cfg(target_os = "linux")]
         {
@@ -126,6 +115,23 @@ fn make_tray() -> hbb_common::ResultType<()> {
                 }
             }
         }
+    };
+    let settings_func = move || {
+        #[cfg(windows)]
+        if crate::platform::windows::open_main_window_settings() {
+            return;
+        }
+        crate::run_me(vec!["--settings"]).ok();
+    };
+    let update_func = move || {
+        #[cfg(windows)]
+        {
+            if let Err(err) = crate::updater::manually_check_update() {
+                log::error!("Failed to check for updates: {err}");
+            }
+        }
+        #[cfg(not(windows))]
+        crate::run_me(vec!["--update"]).ok();
     };
 
     #[cfg(windows)]
@@ -147,7 +153,9 @@ fn make_tray() -> hbb_common::ResultType<()> {
         if let tao::event::Event::NewEvents(tao::event::StartCause::Init) = event {
             // for fixing https://github.com/rustdesk/rustdesk/discussions/10210#discussioncomment-14600745
             // so we start tray, but not to show it
-            if crate::ui_interface::get_builtin_option(hbb_common::config::keys::OPTION_HIDE_TRAY) == "Y" {
+            if crate::ui_interface::get_builtin_option(hbb_common::config::keys::OPTION_HIDE_TRAY)
+                == "Y"
+            {
                 return;
             }
             // We create the icon once the event loop is actually running
@@ -187,39 +195,27 @@ fn make_tray() -> hbb_common::ResultType<()> {
         }
 
         if let Ok(event) = menu_channel.try_recv() {
-            if let Some(quit_i) = &quit_i {
-                if event.id == quit_i.id() {
-                    /* failed in windows, seems no permission to check system process
-                    if !crate::check_process("--server", false) {
-                        *control_flow = ControlFlow::Exit;
-                        return;
-                    }
-                    */
-                    // Remove the icon first: on success `uninstall_service()` ends
-                    // this process with `std::process::exit`, which skips the
-                    // destructor that would remove it, leaving a ghost icon behind.
-                    #[cfg(windows)]
-                    let _ = _tray_icon
-                        .lock()
-                        .unwrap()
-                        .as_mut()
-                        .map(|t| t.set_visible(false));
-                    if !crate::platform::uninstall_service(false, false) {
-                        *control_flow = ControlFlow::Exit;
-                    }
-                    // Still alive, so stopping the service failed or was cancelled
-                    // in the UAC prompt. Show the icon again.
-                    #[cfg(windows)]
-                    let _ = _tray_icon
-                        .lock()
-                        .unwrap()
-                        .as_mut()
-                        .map(|t| t.set_visible(true));
-                } else if event.id == open_i.id() {
-                    open_func();
+            if event.id == quit_i.id() {
+                #[cfg(windows)]
+                let _ = _tray_icon
+                    .lock()
+                    .unwrap()
+                    .as_mut()
+                    .map(|t| t.set_visible(false));
+                #[cfg(windows)]
+                {
+                    crate::platform::windows::quit_all_user_processes();
+                }
+                #[cfg(not(windows))]
+                {
+                    *control_flow = ControlFlow::Exit;
                 }
             } else if event.id == open_i.id() {
                 open_func();
+            } else if event.id == settings_i.id() {
+                settings_func();
+            } else if event.id == update_i.id() {
+                update_func();
             }
         }
 

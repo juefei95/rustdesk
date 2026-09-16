@@ -31,6 +31,7 @@ class _SimpleLinkDesktopPageState extends State<SimpleLinkDesktopPage>
     with WindowListener {
   static const _brandColor = Color(0xFF1769FF);
   static const _sidebarColor = Color(0xFFF7F9FC);
+  static const _trayChannel = MethodChannel('org.rustdesk.rustdesk/tray');
 
   int _selectedPage = 0;
   bool _showLoginPage = false;
@@ -39,10 +40,18 @@ class _SimpleLinkDesktopPageState extends State<SimpleLinkDesktopPage>
   void initState() {
     super.initState();
     windowManager.addListener(this);
+    _trayChannel.setMethodCallHandler((call) async {
+      if (call.method == 'openSettings') {
+        await windowManager.show();
+        await windowManager.focus();
+        _selectPage(3);
+      }
+    });
   }
 
   @override
   void dispose() {
+    _trayChannel.setMethodCallHandler(null);
     windowManager.removeListener(this);
     super.dispose();
   }

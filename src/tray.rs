@@ -102,7 +102,7 @@ fn make_tray() -> hbb_common::ResultType<()> {
         #[cfg(target_os = "windows")]
         {
             if !crate::platform::windows::restore_main_window() {
-                crate::run_me::<&str>(vec![]).ok();
+                crate::platform::windows::quit_all_user_processes();
             }
         }
         #[cfg(target_os = "linux")]
@@ -117,9 +117,13 @@ fn make_tray() -> hbb_common::ResultType<()> {
     };
     let settings_func = move || {
         #[cfg(windows)]
-        if crate::platform::windows::open_main_window_settings() {
+        {
+            if !crate::platform::windows::open_main_window_settings() {
+                crate::platform::windows::quit_all_user_processes();
+            }
             return;
         }
+        #[cfg(not(windows))]
         crate::run_me(vec!["--settings"]).ok();
     };
     #[cfg(windows)]

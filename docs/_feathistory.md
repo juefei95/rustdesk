@@ -10,7 +10,7 @@
 | `src/platform/windows.rs` | `find_main_window`、`restore_main_window`、`open_main_window_settings`、`quit_all_user_processes` | 定位已有主窗口并恢复；发送打开设置消息；清理当前用户启动的相关进程。 |
 | `flutter/windows/runner/flutter_window.cpp` | `kTrayActionMessage` 和 `MessageHandler` | 接收 Rust 发送的 Windows 消息，并转发给 Flutter 的 MethodChannel。 |
 | `flutter/lib/desktop/pages/simplelink_desktop_page.dart` | `org.rustdesk.rustdesk/tray` 的监听 | 接收 `openSettings` 后显示窗口、获得焦点并打开基本设置页面。 |
-| `flutter/windows/runner/main.cpp` | `--settings` 参数白名单、已有窗口激活方式 | 允许“设置”兜底启动；重复启动时恢复最小化窗口并置前。 |
+| `flutter/windows/runner/main.cpp` | `--settings` 参数白名单、已有窗口激活方式 | 保留其他入口的设置参数启动支持；重复启动时恢复最小化窗口并置前。 |
 | `flutter/lib/main.dart` | 读取 `--settings` 启动参数 | 将启动参数传入桌面主页。 |
 | `flutter/lib/desktop/pages/desktop_tab_page.dart` | `openSettingsOnStart` 和设置页 Tab 创建 | 当程序由 `--settings` 启动时，初始显示基本设置页面。 |
 | `src/core_main.rs` | Windows 服务状态判断注释 | 保留并明确 Windows 服务进程无法可靠读取命令行参数的原因；运行逻辑未改变。 |
@@ -27,8 +27,8 @@ Settings -> settings_func
 Exit -> quit_all_user_processes
 ```
 
-- `Open`：Windows 下优先调用 `restore_main_window()`；仅在没有找到主窗口时才调用 `run_me([])` 启动新实例。
-- `Settings`：优先调用 `open_main_window_settings()`；若主窗口不存在，则调用 `run_me(["--settings"])`。
+- `Open`：Windows 下调用 `restore_main_window()`；找不到主窗口时执行统一的用户进程清理并退出托盘，不会启动新实例。
+- `Settings`：Windows 下调用 `open_main_window_settings()`；找不到主窗口时执行统一的用户进程清理并退出托盘，不会启动带 `--settings` 的新实例。
 - `Exit`：不再调用 `uninstall_service(false, false)`，改为调用 `quit_all_user_processes()`。因此不会触发服务卸载对应的 UAC 提权流程。
 
 ### 托盘左键行为
@@ -48,6 +48,8 @@ Exit -> quit_all_user_processes
 ```
 
 完整标题匹配避免将标题为“应用名 - Install”或“应用名 - Connection Manager”的窗口当作主窗口；会话判断避免误操作其他用户会话的窗口。
+
+如果完整标题查找失败，代码会枚举当前 Windows 会话中的 Flutter 顶层窗口并作为回退。该回退只在快速查找失败时使用，用于处理窗口标题被运行时改写的情况，避免直接走 `run_me([])` 并额外创建一个主程序进程。
 
 ### `restore_main_window()`
 
@@ -108,21 +110,9 @@ _selectPage(3)
 
 其中 `_selectPage(3)` 选择简连桌面页中的基本设置页面。`dispose()` 中会注销该处理器，避免页面销毁后仍接收消息。
 
-## 无主窗口时的设置兜底启动
+## `--settings` 启动参数
 
-当托盘进程找不到主窗口时，设置功能不会失效，而是启动：
-
-```text
-rustdesk.exe --settings
-```
-
-这条启动路径涉及三个文件：
-
-| 文件 | 作用 |
-| --- | --- |
-| `flutter/windows/runner/main.cpp` | 将 `--settings` 加入单实例参数白名单，使该参数可启动新实例。重复启动普通实例时使用 `SW_RESTORE`、`BringWindowToTop` 和 `SetForegroundWindow` 恢复已有窗口。 |
-| `flutter/lib/main.dart` | 从 `kBootArgs` 判断是否带有 `--settings`，并传给 `App`。 |
-| `flutter/lib/desktop/pages/desktop_tab_page.dart` | 接到 `openSettingsOnStart` 后创建并选中基本设置 Tab。 |
+`flutter/windows/runner/main.cpp`、`flutter/lib/main.dart` 和 `flutter/lib/desktop/pages/desktop_tab_page.dart` 仍保留 `--settings` 启动参数支持，供其他启动入口使用。托盘菜单不再使用该参数作为“找不到主窗口”时的兜底。
 
 ## 代码调用顺序
 
@@ -139,7 +129,7 @@ src/tray.rs
            -> SetForegroundWindow()
 ```
 
-`restore_main_window()` 返回 `false` 时，`open_func()` 才会调用 `run_me([])` 创建主程序。
+`restore_main_window()` 返回 `false` 时，`open_func()` 调用 `quit_all_user_processes()`，清理用户进程并退出托盘。
 
 ### 从托盘打开基本设置
 
@@ -162,10 +152,8 @@ src/tray.rs
 
 ```text
 settings_func()
-  -> run_me(["--settings"])
-    -> flutter/windows/runner/main.cpp
-    -> flutter/lib/main.dart
-    -> flutter/lib/desktop/pages/desktop_tab_page.dart
+  -> quit_all_user_processes()
+    -> 清理用户进程并退出托盘
 ```
 
 ### 从托盘退出

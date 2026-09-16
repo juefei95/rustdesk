@@ -2336,13 +2336,49 @@ fn find_main_window() -> HWND {
         let class_name = wide_string(FLUTTER_RUNNER_WIN32_WINDOW_CLASS);
         let title = wide_string(&crate::get_app_name());
         let window = FindWindowW(class_name.as_ptr(), title.as_ptr());
-        if window.is_null() {
-            return null_mut();
+        if !window.is_null() {
+            let mut process_id = 0;
+            GetWindowThreadProcessId(window, &mut process_id);
+            if get_session_id_of_process(process_id) == get_current_process_session_id() {
+                return window;
+            }
         }
-        let mut process_id = 0;
-        GetWindowThreadProcessId(window, &mut process_id);
-        if get_session_id_of_process(process_id) == get_current_process_session_id() {
-            window
+
+        struct Context {
+            session_id: u32,
+            window: HWND,
+        }
+
+        unsafe extern "system" fn enum_window(hwnd: HWND, lparam: LPARAM) -> BOOL {
+            let context = &mut *(lparam as *mut Context);
+            let mut class_name = [0u16; 64];
+            let class_name_len =
+                GetClassNameW(hwnd, class_name.as_mut_ptr(), class_name.len() as _);
+            if class_name_len == 0
+                || String::from_utf16_lossy(&class_name[..class_name_len as usize])
+                    != FLUTTER_RUNNER_WIN32_WINDOW_CLASS
+            {
+                return TRUE;
+            }
+
+            let mut process_id = 0;
+            GetWindowThreadProcessId(hwnd, &mut process_id);
+            if get_session_id_of_process(process_id) != context.session_id {
+                return TRUE;
+            }
+
+            context.window = hwnd;
+            FALSE
+        }
+
+        let mut context = Context {
+            session_id: get_current_process_session_id(),
+            window: null_mut(),
+        };
+        EnumWindows(Some(enum_window), &mut context as *mut Context as LPARAM);
+        if !context.window.is_null() {
+            log::debug!("Restoring Flutter window found by class-name fallback");
+            context.window
         } else {
             null_mut()
         }

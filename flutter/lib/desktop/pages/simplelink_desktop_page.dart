@@ -8,12 +8,14 @@ import 'package:flutter_hbb/common/formatter/id_formatter.dart';
 import 'package:flutter_hbb/common/widgets/login.dart';
 import 'package:flutter_hbb/consts.dart';
 import 'package:flutter_hbb/desktop/pages/desktop_home_page.dart';
-import 'package:flutter_hbb/desktop/pages/desktop_setting_page.dart';
 import 'package:flutter_hbb/models/peer_model.dart';
 import 'package:flutter_hbb/models/platform_model.dart';
 import 'package:flutter_hbb/models/remote_control_api.dart';
 import 'package:get/get.dart';
 import 'package:window_manager/window_manager.dart';
+
+const _simpleLinkAutoStartOption = 'simplelink-auto-start';
+const _simpleLinkCloseToTrayOption = 'simplelink-close-to-tray';
 
 class SimpleLinkDesktopPage extends StatefulWidget {
   const SimpleLinkDesktopPage({
@@ -80,6 +82,11 @@ class _SimpleLinkDesktopPageState extends State<SimpleLinkDesktopPage>
 
   @override
   void onWindowClose() async {
+    if (bind.mainGetLocalOption(key: _simpleLinkCloseToTrayOption) == 'N') {
+      await windowManager.setPreventClose(false);
+      await windowManager.destroy();
+      return;
+    }
     await _hideToTray();
     super.onWindowClose();
   }
@@ -120,10 +127,7 @@ class _SimpleLinkDesktopPageState extends State<SimpleLinkDesktopPage>
                             ),
                             const _DeviceListPage(),
                             const _MembershipPage(),
-                            DesktopSettingPage(
-                              key: const ValueKey('simplelink-settings-page'),
-                              initialTabkey: SettingsTabKey.general,
-                            ),
+                            const _SimpleLinkSettingsPage(),
                             // Keeps the existing main-window lifecycle active while
                             // the commercial pages replace its visible interface.
                             const DesktopHomePage(
@@ -165,7 +169,7 @@ class _SimpleLinkDesktopPageState extends State<SimpleLinkDesktopPage>
           _NavigationItem(
             icon: Icons.workspace_premium_outlined,
             selectedIcon: Icons.workspace_premium_rounded,
-            label: '会员',
+            label: '会员中心',
             selected: _selectedPage == 2,
             onTap: () => _selectPage(2),
           ),
@@ -2640,6 +2644,292 @@ class _MembershipPage extends StatelessWidget {
         ),
       );
     });
+  }
+}
+
+class _SimpleLinkSettingsPage extends StatefulWidget {
+  const _SimpleLinkSettingsPage();
+
+  @override
+  State<_SimpleLinkSettingsPage> createState() =>
+      _SimpleLinkSettingsPageState();
+}
+
+class _SimpleLinkSettingsPageState extends State<_SimpleLinkSettingsPage> {
+  static const _brandColor = Color(0xFF1769FF);
+
+  late bool _autoStart;
+  late bool _closeToTray;
+  late bool _savedAutoStart;
+  late bool _savedCloseToTray;
+
+  @override
+  void initState() {
+    super.initState();
+    _savedAutoStart =
+        bind.mainGetLocalOption(key: _simpleLinkAutoStartOption) != 'N';
+    _savedCloseToTray =
+        bind.mainGetLocalOption(key: _simpleLinkCloseToTrayOption) != 'N';
+    _autoStart = _savedAutoStart;
+    _closeToTray = _savedCloseToTray;
+  }
+
+  Future<void> _save() async {
+    await bind.mainSetLocalOption(
+      key: _simpleLinkAutoStartOption,
+      value: _autoStart ? 'Y' : 'N',
+    );
+    await bind.mainSetLocalOption(
+      key: _simpleLinkCloseToTrayOption,
+      value: _closeToTray ? 'Y' : 'N',
+    );
+    if (!mounted) return;
+    setState(() {
+      _savedAutoStart = _autoStart;
+      _savedCloseToTray = _closeToTray;
+    });
+    showToast('设置已保存');
+  }
+
+  void _cancel() {
+    setState(() {
+      _autoStart = _savedAutoStart;
+      _closeToTray = _savedCloseToTray;
+    });
+  }
+
+  void _restoreDefaults() {
+    setState(() {
+      _autoStart = true;
+      _closeToTray = true;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ColoredBox(
+      color: const Color(0xFFF7FAFF),
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: const Color(0xFFE4EAF4)),
+          ),
+          child: Column(
+            children: [
+              Expanded(
+                child: Align(
+                  alignment: Alignment.topLeft,
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 620),
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(32, 28, 32, 0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            '常规设置',
+                            style: TextStyle(
+                              color: Color(0xFF111827),
+                              fontSize: 20,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          _SettingsCheckRow(
+                            title: '开机时自动启动',
+                            value: _autoStart,
+                            onChanged: (value) =>
+                                setState(() => _autoStart = value),
+                          ),
+                          _SettingsCheckRow(
+                            title: '关闭窗口时最小化到托盘',
+                            value: _closeToTray,
+                            onChanged: (value) =>
+                                setState(() => _closeToTray = value),
+                          ),
+                          const SizedBox(height: 12),
+                          const Divider(height: 1, color: Color(0xFFE4EAF4)),
+                          _SettingsActionRow(
+                            icon: Icons.refresh_rounded,
+                            title: '检查更新',
+                            onTap: () => showToast('检查更新功能暂未接入'),
+                          ),
+                          const Divider(height: 1, color: Color(0xFFE4EAF4)),
+                          _SettingsActionRow(
+                            icon: Icons.language_rounded,
+                            title: '官方网站',
+                            onTap: () => showToast('官方网站暂未配置'),
+                          ),
+                          const Divider(height: 1, color: Color(0xFFE4EAF4)),
+                          _SettingsActionRow(
+                            icon: Icons.description_outlined,
+                            title: '用户协议',
+                            onTap: () => showToast('用户协议暂未配置'),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              const Divider(height: 1, color: Color(0xFFE4EAF4)),
+              SizedBox(
+                height: 76,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 22),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      SizedBox(
+                        height: 38,
+                        child: OutlinedButton.icon(
+                          onPressed: _restoreDefaults,
+                          icon: const Icon(Icons.refresh_rounded, size: 18),
+                          label: const Text('恢复默认设置'),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: const Color(0xFF334155),
+                            side:
+                                const BorderSide(color: Color(0xFFDDE5F0)),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 20),
+                      SizedBox(
+                        width: 88,
+                        height: 38,
+                        child: OutlinedButton(
+                          onPressed: _cancel,
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: const Color(0xFF334155),
+                            side:
+                                const BorderSide(color: Color(0xFFDDE5F0)),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                          ),
+                          child: const Text('取消'),
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      SizedBox(
+                        width: 96,
+                        height: 38,
+                        child: ElevatedButton(
+                          onPressed: _save,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: _brandColor,
+                            foregroundColor: Colors.white,
+                            elevation: 0,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                          ),
+                          child: const Text('保存'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SettingsCheckRow extends StatelessWidget {
+  const _SettingsCheckRow({
+    required this.title,
+    required this.value,
+    required this.onChanged,
+  });
+
+  final String title;
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 40,
+      child: Row(
+        children: [
+          SizedBox(
+            width: 24,
+            height: 24,
+            child: Checkbox(
+              value: value,
+              onChanged: (value) => onChanged(value ?? false),
+              activeColor: const Color(0xFF1769FF),
+              side: const BorderSide(color: Color(0xFFBAC6D8)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(4),
+              ),
+            ),
+          ),
+          const SizedBox(width: 18),
+          Text(
+            title,
+            style: const TextStyle(
+              color: Color(0xFF1F2937),
+              fontSize: 15,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SettingsActionRow extends StatelessWidget {
+  const _SettingsActionRow({
+    required this.icon,
+    required this.title,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String title;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      child: SizedBox(
+        height: 62,
+        child: Row(
+          children: [
+            Icon(icon, size: 22, color: const Color(0xFF1F2937)),
+            const SizedBox(width: 18),
+            Expanded(
+              child: Text(
+                title,
+                style: const TextStyle(
+                  color: Color(0xFF1F2937),
+                  fontSize: 15,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+            const Icon(
+              Icons.chevron_right_rounded,
+              color: Color(0xFF1F2937),
+              size: 24,
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 

@@ -1947,11 +1947,63 @@ class _LoginBanner extends StatelessWidget {
                         ),
                       ),
               ),
+              if (isLoggedIn &&
+                  membership != null &&
+                  !membership.trialGiven &&
+                  !isPaidMember) ...[
+                const SizedBox(width: 12),
+                const _ClaimTrialButton(compact: true),
+              ],
             ],
           ),
         );
       },
     );
+  }
+}
+
+class _ClaimTrialButton extends StatelessWidget {
+  const _ClaimTrialButton({this.compact = false});
+
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    return Obx(() {
+      final claiming = gFFI.userModel.remoteTrialClaiming.value;
+      return SizedBox(
+        width: compact ? 114 : 128,
+        height: compact ? 34 : 38,
+        child: ElevatedButton(
+          onPressed: claiming
+              ? null
+              : () async {
+                  try {
+                    await gFFI.userModel.claimRemoteControlTrial();
+                    showToast('已领取 3 天免费体验');
+                  } catch (e) {
+                    showToast(e.toString());
+                  }
+                },
+          style: ElevatedButton.styleFrom(
+            backgroundColor: const Color(0xFF1769FF),
+            foregroundColor: Colors.white,
+            elevation: 0,
+            padding: EdgeInsets.zero,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+          ),
+          child: Text(
+            claiming ? '领取中...' : '领取 3 天体验',
+            style: TextStyle(
+              fontSize: compact ? 12 : 14,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+      );
+    });
   }
 }
 
@@ -2909,7 +2961,11 @@ class _MembershipPage extends StatelessWidget {
                       ),
                     ),
                   ),
-                ),
+                )
+              else if (membership != null &&
+                  !membership.trialGiven &&
+                  !isPaidMember)
+                const _ClaimTrialButton(),
             ],
           ),
         ),

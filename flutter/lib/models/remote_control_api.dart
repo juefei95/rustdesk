@@ -243,8 +243,8 @@ class RemoteControlApi {
       user,
       member is Map<String, dynamic>
           ? RemoteControlMembership.fromJson(member)
-          : const RemoteControlMembership(
-              canControl: true,
+            : const RemoteControlMembership(
+                canControl: false,
               trialGiven: false,
               packageName: '',
               expireTime: '',
@@ -259,6 +259,18 @@ class RemoteControlApi {
     }
     final response = await http.get(Uri.parse('$server/api/remote/status'),
         headers: {'token': token});
+    return RemoteControlMembership.fromJson(_decode(response));
+  }
+
+  static Future<RemoteControlMembership> claimTrial() async {
+    final token = bind.mainGetLocalOption(key: 'access_token');
+    if (token.isEmpty) {
+      throw RemoteControlApiException('请先登录');
+    }
+    final response = await http.post(
+      Uri.parse('$server/api/remote/claimtrial'),
+      headers: {'token': token},
+    );
     return RemoteControlMembership.fromJson(_decode(response));
   }
 

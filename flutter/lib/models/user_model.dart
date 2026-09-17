@@ -21,6 +21,7 @@ class UserModel {
   final RxString avatar = ''.obs;
   final RxBool isAdmin = false.obs;
   final Rxn<RemoteControlMembership> remoteMembership = Rxn();
+  final RxBool remoteTrialClaiming = false.obs;
   final RxString networkError = ''.obs;
   // True when networkError carries a server-reported error rather than a
   // connectivity failure; netWorkErrorWidget hides the network tip then.
@@ -162,6 +163,7 @@ class UserModel {
     displayName.value = '';
     avatar.value = '';
     remoteMembership.value = null;
+    remoteTrialClaiming.value = false;
   }
 
   _parseAndUpdateUser(UserPayload user) {
@@ -279,6 +281,18 @@ class UserModel {
     _parseAndUpdateUser(UserPayload.fromJson(result.user));
     remoteMembership.value = result.membership;
     await updateOtherModels();
+  }
+
+  Future<void> claimRemoteControlTrial() async {
+    if (remoteTrialClaiming.value) {
+      return;
+    }
+    remoteTrialClaiming.value = true;
+    try {
+      remoteMembership.value = await RemoteControlApi.claimTrial();
+    } finally {
+      remoteTrialClaiming.value = false;
+    }
   }
 
   LoginResponse getLoginResponseFromAuthBody(Map<String, dynamic> body) {

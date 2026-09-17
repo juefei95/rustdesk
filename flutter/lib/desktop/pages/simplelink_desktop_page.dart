@@ -92,6 +92,7 @@ class _SimpleLinkDesktopPageState extends State<SimpleLinkDesktopPage>
       return;
     }
     try {
+      await windowManager.setPreventClose(false);
       await Process.start(
         Platform.resolvedExecutable,
         const ['--quit-all'],
@@ -2896,6 +2897,10 @@ class _SimpleLinkSettingsPageState extends State<_SimpleLinkSettingsPage> {
       _autoStart = _savedAutoStart;
       _closeToTray = _savedCloseToTray;
     });
+    bind.mainSetLocalOption(
+      key: _simpleLinkCloseToTrayOption,
+      value: _savedCloseToTray ? 'Y' : 'N',
+    );
   }
 
   void _restoreDefaults() {
@@ -2903,6 +2908,18 @@ class _SimpleLinkSettingsPageState extends State<_SimpleLinkSettingsPage> {
       _autoStart = true;
       _closeToTray = true;
     });
+    bind.mainSetLocalOption(
+      key: _simpleLinkCloseToTrayOption,
+      value: 'Y',
+    );
+  }
+
+  void _setCloseToTray(bool value) {
+    setState(() => _closeToTray = value);
+    bind.mainSetLocalOption(
+      key: _simpleLinkCloseToTrayOption,
+      value: value ? 'Y' : 'N',
+    );
   }
 
   @override
@@ -2947,8 +2964,7 @@ class _SimpleLinkSettingsPageState extends State<_SimpleLinkSettingsPage> {
                           _SettingsCheckRow(
                             title: '关闭窗口时最小化到托盘',
                             value: _closeToTray,
-                            onChanged: (value) =>
-                                setState(() => _closeToTray = value),
+                            onChanged: _setCloseToTray,
                           ),
                           const SizedBox(height: 12),
                           const Divider(height: 1, color: Color(0xFFE4EAF4)),

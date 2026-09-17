@@ -1860,6 +1860,8 @@ class _LoginBanner extends StatelessWidget {
       () {
         final isLoggedIn = gFFI.userModel.userName.value.isNotEmpty;
         final membership = gFFI.userModel.remoteMembership.value;
+        final isPaidMember = membership?.hasPaidMembership == true;
+        final expiryLabel = isPaidMember ? '会员到期时间' : '体验到期时间';
         return Container(
           height: isLoggedIn ? 62 : 44,
           margin: const EdgeInsets.only(bottom: 24),
@@ -1885,7 +1887,7 @@ class _LoginBanner extends StatelessWidget {
                     color: const Color(0xFF1769FF),
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: const Row(
+                  child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Icon(
@@ -1895,7 +1897,7 @@ class _LoginBanner extends StatelessWidget {
                       ),
                       SizedBox(width: 4),
                       Text(
-                        '会员',
+                        isPaidMember ? '会员' : '免费版',
                         style: TextStyle(
                           color: Colors.white,
                           fontSize: 12,
@@ -1914,7 +1916,9 @@ class _LoginBanner extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            membership?.entitlementName ?? '会员权益同步中',
+                            membership == null
+                                ? '当前套餐：权益同步中'
+                                : '当前套餐：${membership.entitlementName}',
                             style: const TextStyle(
                               color: Color(0xFF2354A1),
                               fontSize: 15,
@@ -1924,8 +1928,8 @@ class _LoginBanner extends StatelessWidget {
                           const SizedBox(height: 3),
                           Text(
                             membership?.expireTime.isNotEmpty == true
-                                ? '会员到期时间：${membership!.expireTime}'
-                                : '会员到期时间：暂未获取',
+                                ? '$expiryLabel：${membership!.expireTime}'
+                                : '$expiryLabel：暂未获取',
                             style: const TextStyle(
                               color: Color(0xFF5F7190),
                               fontSize: 12,
@@ -2825,6 +2829,9 @@ class _MembershipPage extends StatelessWidget {
     return Obx(() {
       final userName = gFFI.userModel.userName.value;
       final isLoggedIn = userName.isNotEmpty;
+      final membership = gFFI.userModel.remoteMembership.value;
+      final isPaidMember = membership?.hasPaidMembership == true;
+      final expiryLabel = isPaidMember ? '会员到期时间' : '体验到期时间';
       return Container(
         height: 92,
         decoration: BoxDecoration(
@@ -2866,7 +2873,11 @@ class _MembershipPage extends StatelessWidget {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      isLoggedIn ? '当前套餐：免费版' : '登录后同步设备与会员权益',
+                      isLoggedIn
+                          ? membership == null
+                              ? '当前套餐：权益同步中'
+                              : '当前套餐：${membership.entitlementName}  ·  $expiryLabel：${membership.expireTime.isEmpty ? '暂未获取' : membership.expireTime}'
+                          : '登录后同步设备与会员权益',
                       style: const TextStyle(
                         color: Color(0xFF344054),
                         fontSize: 14,

@@ -45,8 +45,9 @@ class RemoteControlMembership {
     );
   }
 
-  String get entitlementName =>
-      packageName.isNotEmpty ? packageName : (trialGiven ? '免费体验' : '会员');
+  String get entitlementName => packageName.isNotEmpty ? packageName : '免费版';
+
+  bool get hasPaidMembership => packageName.isNotEmpty;
 }
 
 class WechatQrLoginSession {

@@ -1859,8 +1859,9 @@ class _LoginBanner extends StatelessWidget {
     return Obx(
       () {
         final isLoggedIn = gFFI.userModel.userName.value.isNotEmpty;
+        final membership = gFFI.userModel.remoteMembership.value;
         return Container(
-          height: 44,
+          height: isLoggedIn ? 62 : 44,
           margin: const EdgeInsets.only(bottom: 24),
           padding: const EdgeInsets.symmetric(horizontal: 18),
           decoration: BoxDecoration(
@@ -1876,17 +1877,72 @@ class _LoginBanner extends StatelessWidget {
                 size: 20,
               ),
               const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  isLoggedIn ? '已登录账号，可同步设备与会员权益' : '登录账号后可同步设备与会员权益',
-                  style: const TextStyle(
-                    color: Color(0xFF2354A1),
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
+              if (isLoggedIn) ...[
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1769FF),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.workspace_premium_rounded,
+                        color: Colors.white,
+                        size: 15,
+                      ),
+                      SizedBox(width: 4),
+                      Text(
+                        '会员',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
+                const SizedBox(width: 12),
+              ],
+              Expanded(
+                child: isLoggedIn
+                    ? Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            membership?.entitlementName ?? '会员权益同步中',
+                            style: const TextStyle(
+                              color: Color(0xFF2354A1),
+                              fontSize: 15,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          const SizedBox(height: 3),
+                          Text(
+                            membership?.expireTime.isNotEmpty == true
+                                ? '会员到期时间：${membership!.expireTime}'
+                                : '会员到期时间：暂未获取',
+                            style: const TextStyle(
+                              color: Color(0xFF5F7190),
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      )
+                    : const Text(
+                        '登录账号后可同步设备与会员权益',
+                        style: TextStyle(
+                          color: Color(0xFF2354A1),
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
               ),
-              const Icon(Icons.close, color: Color(0xFF91A8CC), size: 18),
             ],
           ),
         );
@@ -1905,7 +1961,8 @@ class _CurrentDeviceCard extends StatelessWidget {
       child: AnimatedBuilder(
         animation: model,
         builder: (context, child) {
-          final online = model.connectStatus > 0;
+          final serverConfigured = RemoteControlApi.hasRendezvousServer;
+          final online = serverConfigured && model.connectStatus > 0;
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -1946,7 +2003,7 @@ class _CurrentDeviceCard extends StatelessWidget {
                   ),
                   const SizedBox(width: 8),
                   Text(
-                    online ? '在线' : '离线',
+                    online ? '在线' : '服务失联',
                     style: TextStyle(
                       fontSize: 13,
                       color: online
@@ -1992,7 +2049,9 @@ class _CurrentDeviceCard extends StatelessWidget {
               ),
               const SizedBox(height: 16),
               Text(
-                '将设备 ID 和连接验证码告知伙伴，对方即可发起远程协助。',
+                serverConfigured
+                    ? '将设备 ID 和连接验证码告知伙伴，对方即可发起远程协助。'
+                    : '服务失联，远程不可用，请先配置服务器。',
                 style: TextStyle(
                   color: Theme.of(context)
                       .textTheme

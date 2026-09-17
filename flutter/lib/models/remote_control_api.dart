@@ -16,11 +16,37 @@ class RemoteControlApiException implements Exception {
 }
 
 class RemoteControlLoginResult {
-  RemoteControlLoginResult(this.token, this.user, this.canControl);
+  RemoteControlLoginResult(this.token, this.user, this.membership);
 
   final String token;
   final Map<String, dynamic> user;
+  final RemoteControlMembership membership;
+}
+
+class RemoteControlMembership {
+  const RemoteControlMembership({
+    required this.canControl,
+    required this.trialGiven,
+    required this.packageName,
+    required this.expireTime,
+  });
+
   final bool canControl;
+  final bool trialGiven;
+  final String packageName;
+  final String expireTime;
+
+  factory RemoteControlMembership.fromJson(Map<String, dynamic> json) {
+    return RemoteControlMembership(
+      canControl: json['can_control'] == true,
+      trialGiven: json['trial_given'] == 1 || json['trial_given'] == true,
+      packageName: (json['package_name'] ?? '').toString().trim(),
+      expireTime: (json['expire_time'] ?? '').toString().trim(),
+    );
+  }
+
+  String get entitlementName =>
+      packageName.isNotEmpty ? packageName : (trialGiven ? '免费体验' : '会员');
 }
 
 class WechatQrLoginSession {
@@ -37,6 +63,9 @@ class WechatQrLoginSession {
 
 class RemoteControlApi {
   static bool get isConfigured => server.isNotEmpty;
+
+  static bool get hasRendezvousServer =>
+      bind.mainGetOptionSync(key: 'custom-rendezvous-server').trim().isNotEmpty;
 
   static bool get isEnabled =>
       bind.mainGetLocalOption(key: _backendMarker) == 'Y';
@@ -71,10 +100,17 @@ class RemoteControlApi {
       final response =
           await http.get(Uri.parse('$baseUrl/api/remote/client/config'));
       final data = _decode(response);
+      final idServer = (data['id_server'] ?? '').toString().trim();
+      if (idServer.isEmpty) {
+        await bind.mainSetLocalOption(key: _backendMarker, value: 'N');
+        await bind.mainSetOption(
+            key: 'custom-rendezvous-server', value: '');
+        return false;
+      }
       await bind.mainSetLocalOption(key: _backendMarker, value: 'Y');
       await bind.mainSetOption(
           key: 'custom-rendezvous-server',
-          value: (data['id_server'] ?? '').toString());
+          value: idServer);
       await bind.mainSetOption(
           key: 'relay-server', value: (data['relay_server'] ?? '').toString());
       await bind.mainSetOption(
@@ -171,7 +207,8 @@ class RemoteControlApi {
       'avatar': (rawUser['avatar'] ?? '').toString(),
       'status': 1,
     };
-    return RemoteControlLoginResult(token, user, member['can_control'] == true);
+    return RemoteControlLoginResult(
+        token, user, RemoteControlMembership.fromJson(member));
   }
 
   static RemoteControlLoginResult _parseWechatLoginResult(
@@ -200,19 +237,31 @@ class RemoteControlApi {
       'status': 1,
     };
     final member = data['member'];
-    final canControl =
-        member is Map<String, dynamic> ? member['can_control'] == true : true;
-    return RemoteControlLoginResult(token, user, canControl);
+    return RemoteControlLoginResult(
+      token,
+      user,
+      member is Map<String, dynamic>
+          ? RemoteControlMembership.fromJson(member)
+          : const RemoteControlMembership(
+              canControl: true,
+              trialGiven: false,
+              packageName: '',
+              expireTime: '',
+            ),
+    );
   }
 
-  static Future<bool> canControl() async {
-    final baseUrl = server;
+  static Future<RemoteControlMembership> membershipStatus() async {
     final token = bind.mainGetLocalOption(key: 'access_token');
     if (token.isEmpty) {
       throw RemoteControlApiException('请先登录');
     }
-    final response = await http.get(Uri.parse('$baseUrl/api/remote/status'),
+    final response = await http.get(Uri.parse('$server/api/remote/status'),
         headers: {'token': token});
-    return _decode(response)['can_control'] == true;
+    return RemoteControlMembership.fromJson(_decode(response));
+  }
+
+  static Future<bool> canControl() async {
+    return (await membershipStatus()).canControl;
   }
 }

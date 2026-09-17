@@ -53,6 +53,20 @@ void main() {
     expect(source, contains('class _DeviceListPage'));
     expect(source, contains('class _DeviceListRow'));
     expect(source, contains('Icons.filter_alt_outlined'));
+    expect(source, contains('RemoteControlApi.hasRendezvousServer'));
+    expect(source, contains("'服务失联，远程不可用'"));
+
+    final commonSource = File('lib/common.dart').readAsStringSync();
+    expect(
+      commonSource,
+      contains('if (!remoteBackend) {'),
+      reason: '商业服务不可用时不能回退到 RustDesk 官网服务器。',
+    );
+
+    final remoteControlApiSource = File(
+      'lib/models/remote_control_api.dart',
+    ).readAsStringSync();
+    expect(remoteControlApiSource, contains('hasRendezvousServer'));
 
     final desktopTabSource = File(
       'lib/desktop/pages/desktop_tab_page.dart',

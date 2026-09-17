@@ -48,7 +48,7 @@ use hbb_common::{
     bail,
     config::{
         self, keys, use_ws, Config, LocalConfig, PeerConfig, PeerInfoSerde, Resolution,
-        CONNECT_TIMEOUT, READ_TIMEOUT, RELAY_PORT, RENDEZVOUS_PORT, RENDEZVOUS_SERVERS,
+        CONNECT_TIMEOUT, READ_TIMEOUT, RELAY_PORT, RENDEZVOUS_PORT,
     },
     fs::JobType,
     futures::future::{select_ok, FutureExt},
@@ -282,18 +282,18 @@ impl Client {
         let (rendezvous_server, servers, contained) = if other_server.is_empty() {
             crate::get_rendezvous_server(1_000).await
         } else {
+            let configured_servers = Config::get_rendezvous_servers();
             if other_server == PUBLIC_SERVER {
-                (
-                    check_port(RENDEZVOUS_SERVERS[0], RENDEZVOUS_PORT),
-                    RENDEZVOUS_SERVERS[1..]
-                        .iter()
-                        .map(|x| x.to_string())
-                        .collect(),
-                    true,
-                )
-            } else {
-                (check_port(other_server, RENDEZVOUS_PORT), Vec::new(), true)
+                bail!("Rendezvous server is not allowed");
             }
+            let other_server = check_port(other_server, RENDEZVOUS_PORT);
+            if !configured_servers
+                .iter()
+                .any(|server| check_port(server, RENDEZVOUS_PORT) == other_server)
+            {
+                bail!("Rendezvous server is not allowed");
+            }
+            (other_server, Vec::new(), true)
         };
 
         if crate::get_ipv6_punch_enabled() {

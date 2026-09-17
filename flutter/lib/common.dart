@@ -2589,6 +2589,10 @@ connect(BuildContext context, String id,
   if (id == '') return;
   try {
     final remoteBackend = await RemoteControlApi.discoverAndSyncConfig();
+    if (!remoteBackend) {
+      showToast('服务失联，远程不可用');
+      return;
+    }
     if (remoteBackend && !await RemoteControlApi.canControl()) {
       showToast('远程控制服务未开通或已到期');
       return;

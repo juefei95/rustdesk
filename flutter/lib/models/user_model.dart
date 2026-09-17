@@ -280,6 +280,11 @@ class UserModel {
     await bind.mainSetLocalOption(key: 'access_token', value: result.token);
     _parseAndUpdateUser(UserPayload.fromJson(result.user));
     remoteMembership.value = result.membership;
+    try {
+      remoteMembership.value = await RemoteControlApi.membershipStatus();
+    } catch (e) {
+      networkError.value = e.toString();
+    }
     await updateOtherModels();
   }
 

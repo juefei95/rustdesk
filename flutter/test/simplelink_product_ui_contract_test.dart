@@ -20,8 +20,10 @@ void main() {
     expect(source, contains("ValueKey('simplelink-peer-id')"));
     expect(source, contains("ValueKey('simplelink-connect-button')"));
     expect(source, contains("label: '首页'"));
-    expect(source, contains('const _LoginBanner()'));
+    expect(source, contains('_LoginBanner(onOpenMembership: onOpenMembership)'));
     expect(source, contains('class _LoginBanner'));
+    expect(source, contains("'升级权益'"));
+    expect(source, contains('现有权益尚未结束'));
     expect(source, isNot(contains('TextButton(onPressed: onLogin')));
     expect(source, contains('BoxConstraints(maxWidth: 980)'));
     expect(source, contains('EdgeInsets.all(24)'));
@@ -47,7 +49,7 @@ void main() {
     expect(source, contains('color: Colors.white'));
     expect(source, contains('await connect('));
     expect(mainSource, contains("windowManager.setTitle('简连远程助手')"));
-    expect(mainSource, contains('const Size(1024, 730)'));
+    expect(mainSource, contains('const Size(1032, 750)'));
     expect(source, contains("label: '设备列表'"));
     expect(source, isNot(contains('class _RemoteAssistancePage')));
     expect(source, contains('class _DeviceListPage'));

@@ -149,6 +149,7 @@ class _SimpleLinkDesktopPageState extends State<SimpleLinkDesktopPage>
                           children: [
                             _ProductHomePage(
                               onOpenDevices: () => _selectPage(1),
+                              onOpenMembership: () => _selectPage(2),
                             ),
                             const _DeviceListPage(),
                             _MembershipPage(onLogin: _openLoginPage),
@@ -1778,9 +1779,13 @@ class _NavigationItem extends StatelessWidget {
 }
 
 class _ProductHomePage extends StatelessWidget {
-  const _ProductHomePage({required this.onOpenDevices});
+  const _ProductHomePage({
+    required this.onOpenDevices,
+    required this.onOpenMembership,
+  });
 
   final VoidCallback onOpenDevices;
+  final VoidCallback onOpenMembership;
 
   @override
   Widget build(BuildContext context) {
@@ -1800,7 +1805,7 @@ class _ProductHomePage extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    const _LoginBanner(),
+                    _LoginBanner(onOpenMembership: onOpenMembership),
                     _HomeTwoColumnLayout(onOpenDevices: onOpenDevices),
                   ],
                 ),
@@ -1849,10 +1854,13 @@ class _HomeTwoColumnLayout extends StatelessWidget {
       },
     );
   }
+
 }
 
 class _LoginBanner extends StatelessWidget {
-  const _LoginBanner();
+  const _LoginBanner({required this.onOpenMembership});
+
+  final VoidCallback onOpenMembership;
 
   @override
   Widget build(BuildContext context) {
@@ -1953,12 +1961,70 @@ class _LoginBanner extends StatelessWidget {
                   !isPaidMember) ...[
                 const SizedBox(width: 12),
                 const _ClaimTrialButton(compact: true),
+              ] else if (isLoggedIn && membership != null) ...[
+                const SizedBox(width: 12),
+                SizedBox(
+                  width: 104,
+                  height: 34,
+                  child: ElevatedButton(
+                    onPressed: () => _openMembership(
+                      context,
+                      membership.canControl,
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF1769FF),
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      padding: EdgeInsets.zero,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                    child: const Text(
+                      '升级权益',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ),
               ],
             ],
           ),
         );
       },
     );
+  }
+
+  Future<void> _openMembership(
+    BuildContext context,
+    bool hasActiveEntitlement,
+  ) async {
+    if (!hasActiveEntitlement) {
+      onOpenMembership();
+      return;
+    }
+    final shouldOpen = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('现有权益尚未结束'),
+        content: const Text('升级套餐后，剩余权益时长将与新套餐时长累计计算。'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('暂不升级'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('前往升级'),
+          ),
+        ],
+      ),
+    );
+    if (shouldOpen == true) {
+      onOpenMembership();
+    }
   }
 }
 
@@ -2005,6 +2071,7 @@ class _ClaimTrialButton extends StatelessWidget {
       );
     });
   }
+
 }
 
 class _CurrentDeviceCard extends StatelessWidget {

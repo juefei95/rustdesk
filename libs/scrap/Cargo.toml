@@ -20,7 +20,7 @@ wayland = ["gstreamer", "gstreamer-app", "gstreamer-video", "dbus", "tracing", "
 # Depends on `wayland`: the three drm modules live inside the `#[cfg(feature = "wayland")]` arm of
 # common/mod.rs, so `scrap/drm` on its own would compile nothing. The root crate happens to always
 # enable `scrap/wayland`, which is what hid this.
-drm = ["wayland", "hbb_common/wayland_probe"]
+drm = ["wayland"]
 mediacodec = ["ndk"]
 linux-pkg-config = ["dep:pkg-config"]
 hwcodec = ["dep:hwcodec"]

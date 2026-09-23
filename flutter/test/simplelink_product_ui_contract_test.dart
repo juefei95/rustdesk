@@ -18,6 +18,12 @@ void main() {
     expect(productHome, lessThan(devicePage));
     expect(devicePage, lessThan(legacyHome));
     expect(source, contains("ValueKey('simplelink-peer-id')"));
+    final peerIdField = source.substring(
+      source.indexOf("ValueKey('simplelink-peer-id')"),
+      source.indexOf("ValueKey('simplelink-peer-password')"),
+    );
+    expect(peerIdField, contains('FilteringTextInputFormatter.digitsOnly'));
+    expect(peerIdField, isNot(contains('IDTextInputFormatter()')));
     expect(source, contains("ValueKey('simplelink-connect-button')"));
     expect(source, contains("label: '首页'"));
     expect(source, contains('_LoginBanner(onOpenMembership: onOpenMembership)'));

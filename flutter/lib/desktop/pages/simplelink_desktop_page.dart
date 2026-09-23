@@ -2265,7 +2265,7 @@ class _QuickConnectCardState extends State<_QuickConnectCard> {
             controller: _idController,
             focusNode: _idFocusNode,
             autofocus: widget.large,
-            inputFormatters: [IDTextInputFormatter()],
+            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
             keyboardType: TextInputType.number,
             textInputAction: TextInputAction.next,
             decoration: _inputDecoration(

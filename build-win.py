@@ -958,7 +958,7 @@ def build_flutter_windows(version, features, skip_portable_pack):
                   './rustdesk_portable.exe')
     print(
         f'output location: {os.path.abspath(os.curdir)}/rustdesk_portable.exe')
-    os.rename('./rustdesk_portable.exe', f'./lindian-{version}-install.exe')
+    os.replace('./rustdesk_portable.exe', f'./lindian-{version}-install.exe')
     print(
         f'output location: {os.path.abspath(os.curdir)}/lindian-{version}-install.exe')
 

@@ -935,13 +935,14 @@ def build_flutter_arch_manjaro(version, features):
 
 def build_flutter_windows(version, features, skip_portable_pack):
     if not skip_cargo:
-        system2(f'cargo build --locked --features {features} --lib --release')
+        system2('powershell -ExecutionPolicy Bypass -File .\\flutter\\run-release.ps1')
         if not os.path.exists("target/release/librustdesk.dll"):
             print("cargo build failed, please check rust source code.")
             exit(-1)
-    os.chdir('flutter')
-    system2('flutter build windows --release')
-    os.chdir('..')
+    else:
+        os.chdir('flutter')
+        system2('flutter build windows --release')
+        os.chdir('..')
     shutil.copy2('target/release/deps/dylib_virtual_display.dll',
                  flutter_build_dir_2)
     if skip_portable_pack:

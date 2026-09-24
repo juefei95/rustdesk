@@ -23,7 +23,7 @@ void main() {
       source.indexOf("ValueKey('simplelink-peer-password')"),
     );
     expect(peerIdField, contains('FilteringTextInputFormatter.digitsOnly'));
-    expect(peerIdField, isNot(contains('IDTextInputFormatter()')));
+    expect(peerIdField, contains('IDTextInputFormatter()'));
     expect(source, contains("ValueKey('simplelink-connect-button')"));
     expect(source, contains("label: '首页'"));
     expect(source, contains('_LoginBanner(onOpenMembership: onOpenMembership)'));

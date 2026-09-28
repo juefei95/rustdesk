@@ -2,6 +2,68 @@
 
 > 本文面向首次阅读 RustDesk 客户端源码的开发者，说明程序入口、启动链路、核心模块、运行时边界和主要数据流。内容以当前仓库源码为准；RustDesk Server（`hbbs`/`hbbr`）是独立项目，不在本仓库中实现。
 
+## 0. 目录结构速览
+
+仓库是一个 Cargo workspace，顶层 Rust crate 既能编译为命令行/旧 UI 程序，也能在启用 `flutter` feature 后编译为供 Flutter 桌面 Runner 加载的动态库。阅读时建议先区分四个层次：应用核心 `src/`、当前界面 `flutter/`、可复用基础库 `libs/`，以及构建与发布文件。
+
+```text
+rustdesk-master/
+├── src/                    Rust 应用核心：启动、主控端、被控端、网络与平台实现
+│   ├── client/             主控端会话事件循环、输入、显示和文件传输逻辑
+│   ├── server/             被控端服务、入站连接、音视频、剪贴板与输入处理
+│   ├── platform/           Windows、Linux、macOS、Android、iOS 系统能力适配
+│   ├── ui/                 旧 Sciter UI，仅在未启用 Flutter 时使用
+│   ├── core_main.rs        进程启动总调度器
+│   ├── client.rs           主控端连接协商、NAT 打洞与中继选择
+│   ├── rendezvous_mediator.rs  被控端注册、保活及接收打洞请求
+│   ├── flutter.rs          Flutter 会话适配与 C ABI 启动入口
+│   ├── flutter_ffi.rs      Flutter Rust Bridge 暴露的 Rust API
+│   ├── ipc.rs              本机进程间通信
+│   └── lib.rs / main.rs    crate 装配与传统 Rust 二进制入口
+├── flutter/                当前 Flutter UI 工程
+│   ├── lib/                Dart 业务代码
+│   │   ├── desktop/        Windows、Linux、macOS 桌面页面和窗口逻辑
+│   │   ├── mobile/         Android、iOS 移动端页面
+│   │   ├── models/         FFI、会话、用户、地址簿等状态模型
+│   │   ├── common.dart     跨页面连接、窗口跳转等通用逻辑
+│   │   └── main.dart       Dart 应用入口与窗口分派
+│   ├── windows/            Windows C++ Runner、CMake 与安装包资源
+│   ├── linux/              Linux GTK Runner 与 CMake
+│   ├── macos/              macOS Swift Runner 与 Xcode 工程
+│   ├── android/            Android Kotlin/Java 平台宿主及 JNI 桥接
+│   ├── ios/                iOS Swift/Objective-C 平台宿主
+│   ├── assets/             图片、字体及其他 Flutter 资源
+│   ├── pubspec.yaml        Dart/Flutter 依赖与资源声明
+│   └── run.ps1 / run.sh    本地 Flutter 调试启动脚本
+├── libs/                   workspace 内部基础 crate
+│   ├── hbb_common/         配置、协议、加密、网络流和共享工具
+│   ├── scrap/              跨平台屏幕采集与编解码适配
+│   ├── enigo/              跨平台键盘、鼠标输入注入
+│   ├── clipboard/          文本和文件剪贴板能力
+│   ├── virtual_display/    Windows 虚拟显示器
+│   └── remote_printer/     Windows 远程打印
+├── res/                    应用图标、安装资源、平台资源和语言相关静态文件
+├── docs/                   架构、构建、部署和开发文档
+├── Cargo.toml              workspace、根 crate、feature 与 Rust 依赖定义
+├── Cargo.lock              已锁定的 Rust 依赖版本
+├── build.rs                Cargo 编译期辅助脚本
+├── build.py                跨平台发行构建与安装包编排脚本
+├── build-win.py            当前 Windows/uv 环境使用的构建脚本副本
+├── vcpkg.json              Windows 原生依赖清单
+├── Dockerfile              容器化构建环境定义
+└── .gitmodules             Git 子模块声明；`libs/hbb_common` 等可能独立维护
+```
+
+几个容易混淆的目录边界如下：
+
+- `src/` 不是单纯“后端服务”。它是运行在客户端本机的 Rust 核心，同时包含主控端和被控端协议、系统服务及 FFI 层。
+- `flutter/` 不只是页面代码。其 `windows/`、`linux/`、`macos/` Runner 是原生宿主，负责加载 Rust 动态库并启动 Flutter Engine。
+- `libs/hbb_common/` 是共享 crate，承担配置与协议等底层约定；修改其中内容时需要注意它可能是 Git 子模块，应在其仓库内单独检查和提交。
+- `target/`、`flutter/build/`、`.dart_tool/`、`vcpkg_installed/` 均是构建生成目录，不应作为业务源码修改入口。
+- 根目录的 `lindian-*-install.exe`、`rustdesk_portable.exe` 等属于本机构建产物，不是源代码；正式产物命名规则由构建脚本和应用元数据共同决定。
+
+若只处理某类需求，可按下面路径进入：界面与交互优先看 `flutter/lib/`；连接失败、打洞或中继优先看 `src/client.rs`、`src/rendezvous_mediator.rs`；被控端没有响应优先看 `src/server/`；服务器、密钥和本地配置优先看 `libs/hbb_common/src/config.rs`；Windows 打包、图标或 exe 外壳优先看 `build-win.py`、`flutter/windows/` 与 `res/`。
+
 ## 1. 架构概览
 
 RustDesk 客户端采用 **Flutter 界面 + Rust 核心 + 平台适配层** 的分层架构：

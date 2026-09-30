@@ -238,7 +238,7 @@ function Initialize-CargoManifestOverlay {
 
     $OverlayLibs = Join-Path $OverlayRoot "libs"
     New-Item -ItemType Directory -Path $OverlayLibs -Force | Out-Null
-    foreach ($Name in @("hbb_common", "enigo", "clipboard", "virtual_display", "portable", "remote_printer", "libxdo-sys-stub")) {
+    foreach ($Name in @("hbb_common", "base", "enigo", "clipboard", "virtual_display", "portable", "remote_printer", "libxdo-sys-stub")) {
         $Target = Join-Path $ProjectDirectory "libs\$Name"
         if (Test-Path $Target) {
             New-DirectoryJunction (Join-Path $OverlayLibs $Name) $Target

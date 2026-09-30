@@ -1378,6 +1378,7 @@ pub fn session_start_(
     if let Some(session) = sessions::get_session_by_session_id(session_id) {
         let is_first_ui_session = session.session_handlers.read().unwrap().len() == 1;
         if !is_connected && is_first_ui_session {
+            log::info!("用户发起远程连接，目标设备 ID: {}", id);
             log::info!(
                 "Session {} start, use texture render: {}",
                 id,

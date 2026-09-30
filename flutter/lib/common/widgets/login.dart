@@ -800,7 +800,10 @@ Future<bool?> _openLoginDialog() async {
           if (resp.access_token != null) {
             if (storeIfAccessToken) {
               await bind.mainSetLocalOption(
-                  key: 'access_token', value: resp.access_token!);
+                  key: RemoteControlApi.isEnabled
+                      ? RemoteControlApi.accessTokenKey
+                      : 'access_token',
+                  value: resp.access_token!);
               await bind.mainSetLocalOption(
                   key: 'user_info', value: jsonEncode(resp.user ?? {}));
             }
@@ -1164,7 +1167,10 @@ Future<bool?> verificationCodeDialog(
           case HttpType.kAuthResTypeToken:
             if (resp.access_token != null) {
               await bind.mainSetLocalOption(
-                  key: 'access_token', value: resp.access_token!);
+                  key: RemoteControlApi.isEnabled
+                      ? RemoteControlApi.accessTokenKey
+                      : 'access_token',
+                  value: resp.access_token!);
               close(true);
               return;
             }

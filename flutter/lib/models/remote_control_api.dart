@@ -63,6 +63,8 @@ class WechatQrLoginSession {
 }
 
 class RemoteControlApi {
+  static const accessTokenKey = 'remote_control_access_token';
+
   static bool get isConfigured => server.isNotEmpty;
 
   static bool get hasRendezvousServer =>
@@ -253,7 +255,7 @@ class RemoteControlApi {
   }
 
   static Future<RemoteControlMembership> membershipStatus() async {
-    final token = bind.mainGetLocalOption(key: 'access_token');
+    final token = bind.mainGetLocalOption(key: accessTokenKey);
     if (token.isEmpty) {
       throw RemoteControlApiException('请先登录');
     }
@@ -263,7 +265,7 @@ class RemoteControlApi {
   }
 
   static Future<RemoteControlMembership> claimTrial() async {
-    final token = bind.mainGetLocalOption(key: 'access_token');
+    final token = bind.mainGetLocalOption(key: accessTokenKey);
     if (token.isEmpty) {
       throw RemoteControlApiException('请先登录');
     }

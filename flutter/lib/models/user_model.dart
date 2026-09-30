@@ -62,7 +62,20 @@ class UserModel {
     } catch (e) {
       networkError.value = e.toString();
     }
-    final token = bind.mainGetLocalOption(key: 'access_token');
+    var token = bind.mainGetLocalOption(key: 'access_token');
+    if (RemoteControlApi.isEnabled) {
+      final remoteControlToken =
+          bind.mainGetLocalOption(key: RemoteControlApi.accessTokenKey);
+      if (remoteControlToken.isNotEmpty) {
+        token = remoteControlToken;
+      } else if (token.isNotEmpty) {
+        await bind.mainSetLocalOption(
+            key: RemoteControlApi.accessTokenKey, value: token);
+      }
+      if (bind.mainGetLocalOption(key: 'access_token').isNotEmpty) {
+        await bind.mainSetLocalOption(key: 'access_token', value: '');
+      }
+    }
     if (token == '') {
       await updateOtherModels();
       return;
@@ -154,6 +167,8 @@ class UserModel {
 
   Future<void> reset({bool resetOther = false}) async {
     await bind.mainSetLocalOption(key: 'access_token', value: '');
+    await bind.mainSetLocalOption(
+        key: RemoteControlApi.accessTokenKey, value: '');
     await bind.mainSetLocalOption(key: 'user_info', value: '');
     if (resetOther) {
       await gFFI.abModel.reset();
@@ -277,7 +292,9 @@ class UserModel {
 
   Future<void> applyRemoteControlLoginResult(
       RemoteControlLoginResult result) async {
-    await bind.mainSetLocalOption(key: 'access_token', value: result.token);
+    await bind.mainSetLocalOption(
+        key: RemoteControlApi.accessTokenKey, value: result.token);
+    await bind.mainSetLocalOption(key: 'access_token', value: '');
     _parseAndUpdateUser(UserPayload.fromJson(result.user));
     remoteMembership.value = result.membership;
     try {

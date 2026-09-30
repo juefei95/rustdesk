@@ -188,7 +188,11 @@ function Stop-BuildOutputProcess {
 }
 
 function Clear-StaleFlutterWindowsBuildCache {
-    & (Join-Path $FlutterDirectory "clear-stale-windows-build-cache.ps1")
+    $ClearScript = Join-Path $FlutterDirectory "clear-stale-windows-build-cache.ps1"
+    if (-not (Test-Path $ClearScript)) {
+        return
+    }
+    & $ClearScript
     if ($LASTEXITCODE -ne 0) {
         Stop-ScriptWithExitCode $LASTEXITCODE "clear-stale-windows-build-cache.ps1 failed with exit code $LASTEXITCODE"
     }

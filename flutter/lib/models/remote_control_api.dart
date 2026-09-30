@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import '../consts.dart';
 import '../config/remote_control_config.dart';
 import '../utils/http_service.dart' as http;
 import 'platform_model.dart';
@@ -120,10 +121,18 @@ class RemoteControlApi {
           key: 'key', value: (data['public_key'] ?? '').toString());
       await bind.mainSetOption(
           key: 'api-server', value: (data['api_server'] ?? '').toString());
+      await _setPunchOptionDefault(kOptionEnableUdpPunch, true);
+      await _setPunchOptionDefault(kOptionEnableIpv6Punch, false);
       return true;
     } catch (_) {
       if (isEnabled) rethrow;
       return false;
+    }
+  }
+
+  static Future<void> _setPunchOptionDefault(String key, bool enabled) async {
+    if (bind.mainGetLocalOption(key: key).isEmpty) {
+      await bind.mainSetLocalOption(key: key, value: enabled ? 'Y' : 'N');
     }
   }
 

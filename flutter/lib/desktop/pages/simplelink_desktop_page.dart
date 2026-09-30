@@ -2379,10 +2379,42 @@ class _RecentSessionsCard extends StatefulWidget {
 }
 
 class _RecentSessionsCardState extends State<_RecentSessionsCard> {
+  static const _onlineRefreshInterval = Duration(seconds: 15);
+
+  Timer? _onlineRefreshTimer;
+
   @override
   void initState() {
     super.initState();
-    bind.mainLoadRecentPeers();
+    _loadAndRefreshOnlineStates();
+    _onlineRefreshTimer = Timer.periodic(
+        _onlineRefreshInterval, (_) => _refreshOnlineStates());
+  }
+
+  @override
+  void dispose() {
+    _onlineRefreshTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _loadAndRefreshOnlineStates() async {
+    await bind.mainLoadRecentPeers();
+    await _refreshOnlineStates();
+  }
+
+  Future<void> _refreshOnlineStates() async {
+    final ids = gFFI.recentPeersModel.peers
+        .map((peer) => peer.id)
+        .where((id) => id.isNotEmpty)
+        .toSet()
+        .toList(growable: false);
+    if (ids.isNotEmpty) {
+      try {
+        await bind.queryOnlines(ids: ids);
+      } catch (e) {
+        debugPrint('Failed to refresh recent peer online states: $e');
+      }
+    }
   }
 
   @override
@@ -3057,8 +3089,12 @@ class _SimpleLinkSettingsPageState extends State<_SimpleLinkSettingsPage> {
 
   late bool _autoStart;
   late bool _closeToTray;
+  late bool _udpPunch;
+  late bool _ipv6Punch;
   late bool _savedAutoStart;
   late bool _savedCloseToTray;
+  late bool _savedUdpPunch;
+  late bool _savedIpv6Punch;
 
   @override
   void initState() {
@@ -3067,8 +3103,14 @@ class _SimpleLinkSettingsPageState extends State<_SimpleLinkSettingsPage> {
         bind.mainGetLocalOption(key: _simpleLinkAutoStartOption) != 'N';
     _savedCloseToTray =
         bind.mainGetLocalOption(key: _simpleLinkCloseToTrayOption) != 'N';
+    _savedUdpPunch =
+        bind.mainGetLocalOption(key: kOptionEnableUdpPunch) != 'N';
+    _savedIpv6Punch =
+        bind.mainGetLocalOption(key: kOptionEnableIpv6Punch) == 'Y';
     _autoStart = _savedAutoStart;
     _closeToTray = _savedCloseToTray;
+    _udpPunch = _savedUdpPunch;
+    _ipv6Punch = _savedIpv6Punch;
   }
 
   Future<void> _save() async {
@@ -3080,10 +3122,14 @@ class _SimpleLinkSettingsPageState extends State<_SimpleLinkSettingsPage> {
       key: _simpleLinkCloseToTrayOption,
       value: _closeToTray ? 'Y' : 'N',
     );
+    await mainSetLocalBoolOption(kOptionEnableUdpPunch, _udpPunch);
+    await mainSetLocalBoolOption(kOptionEnableIpv6Punch, _ipv6Punch);
     if (!mounted) return;
     setState(() {
       _savedAutoStart = _autoStart;
       _savedCloseToTray = _closeToTray;
+      _savedUdpPunch = _udpPunch;
+      _savedIpv6Punch = _ipv6Punch;
     });
     showToast('设置已保存');
   }
@@ -3092,6 +3138,8 @@ class _SimpleLinkSettingsPageState extends State<_SimpleLinkSettingsPage> {
     setState(() {
       _autoStart = _savedAutoStart;
       _closeToTray = _savedCloseToTray;
+      _udpPunch = _savedUdpPunch;
+      _ipv6Punch = _savedIpv6Punch;
     });
     bind.mainSetLocalOption(
       key: _simpleLinkCloseToTrayOption,
@@ -3103,6 +3151,8 @@ class _SimpleLinkSettingsPageState extends State<_SimpleLinkSettingsPage> {
     setState(() {
       _autoStart = true;
       _closeToTray = true;
+      _udpPunch = true;
+      _ipv6Punch = false;
     });
     bind.mainSetLocalOption(
       key: _simpleLinkCloseToTrayOption,
@@ -3161,6 +3211,18 @@ class _SimpleLinkSettingsPageState extends State<_SimpleLinkSettingsPage> {
                             title: '关闭窗口时最小化到托盘',
                             value: _closeToTray,
                             onChanged: _setCloseToTray,
+                          ),
+                          _SettingsCheckRow(
+                            title: '启用 UDP 打洞',
+                            value: _udpPunch,
+                            onChanged: (value) =>
+                                setState(() => _udpPunch = value),
+                          ),
+                          _SettingsCheckRow(
+                            title: '启用 IPv6 P2P 连接',
+                            value: _ipv6Punch,
+                            onChanged: (value) =>
+                                setState(() => _ipv6Punch = value),
                           ),
                           const SizedBox(height: 12),
                           const Divider(height: 1, color: Color(0xFFE4EAF4)),

@@ -60,7 +60,7 @@ rustdesk-master/
 - `flutter/` 不只是页面代码。其 `windows/`、`linux/`、`macos/` Runner 是原生宿主，负责加载 Rust 动态库并启动 Flutter Engine。
 - `libs/hbb_common/` 是共享 crate，承担配置与协议等底层约定；修改其中内容时需要注意它可能是 Git 子模块，应在其仓库内单独检查和提交。
 - `target/`、`flutter/build/`、`.dart_tool/`、`vcpkg_installed/` 均是构建生成目录，不应作为业务源码修改入口。
-- 根目录的 `lindian-*-install.exe`、`rustdesk_portable.exe` 等属于本机构建产物，不是源代码；正式产物命名规则由构建脚本和应用元数据共同决定。
+- 根目录的 `dianlian-*-install.exe`、`rustdesk_portable.exe` 等属于本机构建产物，不是源代码；正式产物命名规则由构建脚本和应用元数据共同决定。
 
 若只处理某类需求，可按下面路径进入：界面与交互优先看 `flutter/lib/`；连接失败、打洞或中继优先看 `src/client.rs`、`src/rendezvous_mediator.rs`；被控端没有响应优先看 `src/server/`；服务器、密钥和本地配置优先看 `libs/hbb_common/src/config.rs`；Windows 打包、图标或 exe 外壳优先看 `build-win.py`、`flutter/windows/` 与 `res/`。
 

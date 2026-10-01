@@ -1,0 +1,15 @@
+点连远程助手
+
+本产品基于 RustDesk 开源项目进行个性化定制。
+
+点连定制源码：
+https://github.com/juefei95/rustdesk
+
+RustDesk 客户端上游源码：
+https://github.com/rustdesk/rustdesk
+
+RustDesk 服务端上游源码：
+https://github.com/rustdesk/rustdesk-server
+
+本产品中基于 RustDesk 的程序部分适用 GNU Affero General Public License
+v3.0 或更高版本（AGPL-3.0-or-later）。完整许可证文本见同目录 LICENCE。

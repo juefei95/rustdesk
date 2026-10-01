@@ -3222,6 +3222,85 @@ class _SimpleLinkSettingsPageState extends State<_SimpleLinkSettingsPage> {
     }
   }
 
+  Future<void> _openExternalUrl(String url) async {
+    final opened = await launchUrl(
+      Uri.parse(url),
+      mode: LaunchMode.externalApplication,
+    );
+    if (!opened && mounted) {
+      showToast('无法打开链接');
+    }
+  }
+
+  Future<void> _openInstalledLicense() async {
+    final license = File(
+      '${File(Platform.resolvedExecutable).parent.path}${Platform.pathSeparator}LICENCE',
+    );
+    if (!await license.exists()) {
+      if (mounted) {
+        showToast('未找到安装目录中的 LICENCE 文件');
+      }
+      return;
+    }
+    final opened = await launchUrl(license.uri);
+    if (!opened && mounted) {
+      showToast('无法打开 LICENCE 文件');
+    }
+  }
+
+  Future<void> _showUserAgreement() async {
+    await showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.description_outlined, color: _brandColor),
+            SizedBox(width: 10),
+            Text('用户协议与开源许可说明'),
+          ],
+        ),
+        content: const SizedBox(
+          width: 520,
+          child: SingleChildScrollView(
+            child: SelectionArea(
+              child: Text(
+                '欢迎使用点连远程助手。使用本软件即表示您同意：\n\n'
+                '1. 您仅可在已获得设备所有者或管理者明确授权的情况下发起远程访问、文件传输或系统管理操作。\n\n'
+                '2. 您应自行妥善保管设备 ID、验证码及账户凭据，并对通过本软件进行的操作负责。\n\n'
+                '3. 本软件基于 RustDesk 开源项目进行个性化定制。完整许可证、上游项目与第三方声明见安装目录中的 LICENCE 和 NOTICE。\n\n'
+                '4. RustDesk 及与其组合、修改或衍生的相关程序部分受 GNU Affero General Public License v3.0 或更高版本（AGPL-3.0-or-later）约束。\n\n'
+                '5. AGPL-3.0-or-later 允许商业使用、修改和分发，但须保留版权与许可声明；当修改后的程序通过网络向用户提供服务时，亦应向这些用户提供对应源代码的获取方式。\n\n'
+                '6. 点连发布的每个版本应能对应到可获取的完整定制源码、构建脚本和第三方许可证信息。\n\n'
+                '本说明不构成法律意见。如涉及对外商业发行、SaaS 服务或企业部署，请在发布前完成对应源代码、第三方许可证及商标使用的合规审查。',
+                style: TextStyle(
+                  color: Color(0xFF334155),
+                  fontSize: 14,
+                  height: 1.55,
+                ),
+              ),
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: _openInstalledLicense,
+            child: const Text('查看许可证'),
+          ),
+          TextButton(
+            onPressed: () => _openExternalUrl(
+              'https://github.com/juefei95/rustdesk',
+            ),
+            child: const Text('点连远程源码'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('我已了解'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _save() async {
     await bind.mainSetLocalOption(
       key: _simpleLinkAutoStartOption,
@@ -3350,7 +3429,7 @@ class _SimpleLinkSettingsPageState extends State<_SimpleLinkSettingsPage> {
                           _SettingsActionRow(
                             icon: Icons.description_outlined,
                             title: '用户协议',
-                            onTap: () => showToast('用户协议暂未配置'),
+                            onTap: _showUserAgreement,
                           ),
                         ],
                       ),

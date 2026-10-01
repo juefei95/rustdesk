@@ -13,6 +13,7 @@ import 'package:flutter_hbb/models/peer_model.dart';
 import 'package:flutter_hbb/models/platform_model.dart';
 import 'package:flutter_hbb/models/remote_control_api.dart';
 import 'package:get/get.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:window_manager/window_manager.dart';
 
 const _simpleLinkAutoStartOption = 'simplelink-auto-start';
@@ -3211,6 +3212,16 @@ class _SimpleLinkSettingsPageState extends State<_SimpleLinkSettingsPage> {
     bind.mainGetSoftwareUpdateUrl();
   }
 
+  Future<void> _openOfficialWebsite() async {
+    final opened = await launchUrl(
+      Uri.parse('https://lindiantech.top/'),
+      mode: LaunchMode.externalApplication,
+    );
+    if (!opened && mounted) {
+      showToast('无法打开官方网站');
+    }
+  }
+
   Future<void> _save() async {
     await bind.mainSetLocalOption(
       key: _simpleLinkAutoStartOption,
@@ -3333,7 +3344,7 @@ class _SimpleLinkSettingsPageState extends State<_SimpleLinkSettingsPage> {
                           _SettingsActionRow(
                             icon: Icons.language_rounded,
                             title: '官方网站',
-                            onTap: () => showToast('官方网站暂未配置'),
+                            onTap: _openOfficialWebsite,
                           ),
                           const Divider(height: 1, color: Color(0xFFE4EAF4)),
                           _SettingsActionRow(

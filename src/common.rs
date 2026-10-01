@@ -7,6 +7,7 @@ use std::{
 };
 
 use serde_json::{json, Map, Value};
+use serde_derive::Deserialize;
 
 #[cfg(not(target_os = "ios"))]
 use hbb_common::whoami;
@@ -94,9 +95,24 @@ pub mod input {
 
 lazy_static::lazy_static! {
     pub static ref SOFTWARE_UPDATE_URL: Arc<Mutex<String>> = Default::default();
+    pub static ref SOFTWARE_UPDATE_SHA256: Arc<Mutex<String>> = Default::default();
     pub static ref DEVICE_ID: Arc<Mutex<String>> = Default::default();
     pub static ref DEVICE_NAME: Arc<Mutex<String>> = Default::default();
     static ref PUBLIC_IPV6_ADDR: Arc<Mutex<(Option<SocketAddr>, Option<Instant>)>> = Default::default();
+}
+
+const DIANLIAN_STABLE_MANIFEST_URL: &str = "https://download.zhenhaiedu.top/stable.json";
+
+#[derive(Deserialize)]
+struct DianLianStableManifest {
+    version: String,
+    windows: DianLianWindowsRelease,
+}
+
+#[derive(Deserialize)]
+struct DianLianWindowsRelease {
+    url: String,
+    sha256: String,
 }
 
 lazy_static::lazy_static! {
@@ -941,13 +957,92 @@ pub fn is_modifier(evt: &KeyEvent) -> bool {
 }
 
 pub fn check_software_update() {
-    if is_custom_client() {
+    if is_custom_client() || get_app_name() == "DianLianRemoteAssistant" {
+        std::thread::spawn(move || {
+            if let Err(err) = do_check_dianlian_software_update() {
+                log::warn!("Failed to check DianLian software update: {}", err);
+            }
+        });
         return;
     }
     let opt = LocalConfig::get_option(keys::OPTION_ENABLE_CHECK_UPDATE);
     if config::option2bool(keys::OPTION_ENABLE_CHECK_UPDATE, &opt) {
         std::thread::spawn(move || allow_err!(do_check_software_update()));
     }
+}
+
+#[tokio::main(flavor = "current_thread")]
+async fn do_check_dianlian_software_update() -> ResultType<()> {
+    let client = crate::hbbs_http::create_http_client_async_with_url_strict(
+        DIANLIAN_STABLE_MANIFEST_URL,
+    )
+    .await?;
+    let response = client
+        .get(DIANLIAN_STABLE_MANIFEST_URL)
+        .send()
+        .await?
+        .error_for_status()?;
+    let manifest: DianLianStableManifest = response.json().await?;
+    let sha256 = manifest.windows.sha256.trim().to_ascii_lowercase();
+
+    if !manifest.windows.url.starts_with("https://") {
+        bail!("DianLian update url must use HTTPS");
+    }
+    if sha256.len() != 64 || !sha256.chars().all(|c| c.is_ascii_hexdigit()) {
+        bail!("DianLian update manifest contains an invalid SHA-256");
+    }
+
+    let update_available =
+        get_version_number(&manifest.version) > get_version_number(crate::VERSION);
+    let (url, version) = if update_available {
+        *SOFTWARE_UPDATE_URL.lock().unwrap() = manifest.windows.url.clone();
+        *SOFTWARE_UPDATE_SHA256.lock().unwrap() = sha256;
+        (manifest.windows.url, manifest.version)
+    } else {
+        SOFTWARE_UPDATE_URL.lock().unwrap().clear();
+        SOFTWARE_UPDATE_SHA256.lock().unwrap().clear();
+        (String::new(), crate::VERSION.to_owned())
+    };
+
+    #[cfg(feature = "flutter")]
+    {
+        let data = json!({
+            "name": "check_software_update_finish",
+            "url": url,
+            "version": version,
+        });
+        let _ = crate::flutter::push_global_event(
+            crate::flutter::APP_TYPE_MAIN,
+            serde_json::to_string(&data).unwrap_or_default(),
+        );
+    }
+    Ok(())
+}
+
+pub fn verify_software_update_file(path: &std::path::Path) -> ResultType<()> {
+    let expected = SOFTWARE_UPDATE_SHA256.lock().unwrap().clone();
+    if expected.is_empty() {
+        return Ok(());
+    }
+
+    use hbb_common::sha2::{Digest, Sha256};
+    use std::io::Read;
+
+    let mut file = std::fs::File::open(path)?;
+    let mut hasher = Sha256::new();
+    let mut buffer = [0u8; 64 * 1024];
+    loop {
+        let count = file.read(&mut buffer)?;
+        if count == 0 {
+            break;
+        }
+        hasher.update(&buffer[..count]);
+    }
+    let actual = format!("{:x}", hasher.finalize());
+    if actual != expected {
+        bail!("Downloaded update SHA-256 does not match stable.json");
+    }
+    Ok(())
 }
 
 // No need to check `danger_accept_invalid_cert` for now.

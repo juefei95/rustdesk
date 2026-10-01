@@ -8,6 +8,7 @@ import 'package:flutter_hbb/common/formatter/id_formatter.dart';
 import 'package:flutter_hbb/common/widgets/login.dart';
 import 'package:flutter_hbb/consts.dart';
 import 'package:flutter_hbb/desktop/pages/desktop_home_page.dart';
+import 'package:flutter_hbb/desktop/widgets/update_progress.dart';
 import 'package:flutter_hbb/models/peer_model.dart';
 import 'package:flutter_hbb/models/platform_model.dart';
 import 'package:flutter_hbb/models/remote_control_api.dart';
@@ -3159,6 +3160,55 @@ class _SimpleLinkSettingsPageState extends State<_SimpleLinkSettingsPage> {
     _closeToTray = _savedCloseToTray;
     _udpPunch = _savedUdpPunch;
     _ipv6Punch = _savedIpv6Punch;
+    platformFFI.registerEventHandler(
+      kCheckSoftwareUpdateFinish,
+      'simplelink-settings-update',
+      _handleUpdateCheck,
+    );
+  }
+
+  @override
+  void dispose() {
+    platformFFI.unregisterEventHandler(
+      kCheckSoftwareUpdateFinish,
+      'simplelink-settings-update',
+    );
+    super.dispose();
+  }
+
+  Future<void> _handleUpdateCheck(Map<String, dynamic> event) async {
+    if (!mounted) return;
+    final url = event['url'];
+    if (url is! String || url.isEmpty) {
+      showToast('当前已是最新版本');
+      return;
+    }
+    final version = event['version'] is String ? event['version'] : '';
+    await showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('发现新版本'),
+        content: Text(version.isEmpty ? '发现可用更新。' : '发现 $version 版本，是否立即下载并安装？'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('稍后再说'),
+          ),
+          FilledButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              handleUpdate(url);
+            },
+            child: const Text('立即更新'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _checkForUpdate() {
+    showToast('正在检查更新');
+    bind.mainGetSoftwareUpdateUrl();
   }
 
   Future<void> _save() async {
@@ -3277,7 +3327,7 @@ class _SimpleLinkSettingsPageState extends State<_SimpleLinkSettingsPage> {
                           _SettingsActionRow(
                             icon: Icons.refresh_rounded,
                             title: '检查更新',
-                            onTap: () => showToast('检查更新功能暂未接入'),
+                            onTap: _checkForUpdate,
                           ),
                           const Divider(height: 1, color: Color(0xFFE4EAF4)),
                           _SettingsActionRow(

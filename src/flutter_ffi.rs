@@ -2796,6 +2796,11 @@ pub fn main_set_common(_key: String, _value: String) {
                     "New version file is downloaded, update begin, {:?}",
                     new_version_file.to_str()
                 );
+                if let Err(err) = crate::common::verify_software_update_file(&new_version_file) {
+                    log::error!("Downloaded update verification failed: {}", err);
+                    std::fs::remove_file(&new_version_file).ok();
+                    return;
+                }
                 if let Some(f) = new_version_file.to_str() {
                     // 1.4.0 does not support "--update"
                     // But we can assume that the new version supports it.

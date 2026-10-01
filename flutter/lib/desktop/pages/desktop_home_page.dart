@@ -908,11 +908,49 @@ void setPasswordDialog({VoidCallback? notEmptyCallback}) async {
       : (presetPassword ? translate('preset-password-in-use-tip') : '');
   final showStatusTipOnMobile =
       statusTip.isNotEmpty && !isDesktop && !isWebDesktop;
+  FocusNode? confirmationFocusNode;
 
   gFFI.dialogManager.show((setState, close, context) {
     updateCanSubmit() {
       canSubmit = p0.text.trim().isNotEmpty || p1.text.trim().isNotEmpty;
     }
+
+    KeyEventResult handleDeleteKey(
+      TextEditingController controller,
+      RawKeyEvent event,
+      VoidCallback onChanged,
+    ) {
+      if (event is! RawKeyDownEvent ||
+          event.logicalKey != LogicalKeyboardKey.delete) {
+        return KeyEventResult.ignored;
+      }
+      final selection = controller.selection;
+      if (!selection.isValid || controller.text.isEmpty) {
+        return KeyEventResult.handled;
+      }
+      final start = selection.start;
+      final end = selection.isCollapsed
+          ? (start < controller.text.length ? start + 1 : start)
+          : selection.end;
+      if (start == end) {
+        return KeyEventResult.handled;
+      }
+      controller.value = TextEditingValue(
+        text: controller.text.replaceRange(start, end, ''),
+        selection: TextSelection.collapsed(offset: start),
+      );
+      onChanged();
+      return KeyEventResult.handled;
+    }
+
+    confirmationFocusNode ??= FocusNode(
+      onKey: (_, event) => handleDeleteKey(p1, event, () {
+        setState(() {
+          errMsg1 = '';
+          updateCanSubmit();
+        });
+      }),
+    );
 
     submit() async {
       if (!canSubmit) {
@@ -947,6 +985,10 @@ void setPasswordDialog({VoidCallback? notEmptyCallback}) async {
         });
         return;
       }
+      if (pass.isNotEmpty && notEmptyCallback == null) {
+        await gFFI.serverModel.setVerificationMethod(kUseBothPasswords);
+      }
+      await gFFI.serverModel.updatePasswordModel();
       if (pass.isNotEmpty) {
         notEmptyCallback?.call();
       }
@@ -958,7 +1000,7 @@ void setPasswordDialog({VoidCallback? notEmptyCallback}) async {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Icon(Icons.key, color: MyTheme.accent),
-          Text(translate("Set Password")).paddingOnly(left: 10),
+          const Text('设置固定验证码').paddingOnly(left: 10),
         ],
       ),
       content: ConstrainedBox(
@@ -972,22 +1014,31 @@ void setPasswordDialog({VoidCallback? notEmptyCallback}) async {
             Row(
               children: [
                 Expanded(
-                  child: TextField(
-                    obscureText: true,
-                    decoration: InputDecoration(
-                        labelText: translate('Password'),
-                        errorText: errMsg0.isNotEmpty ? errMsg0 : null),
-                    controller: p0,
-                    autofocus: true,
-                    onChanged: (value) {
-                      rxPass.value = value.trim();
+                  child: Focus(
+                    onKey: (_, event) => handleDeleteKey(p0, event, () {
+                      rxPass.value = p0.text.trim();
                       setState(() {
                         errMsg0 = '';
                         updateCanSubmit();
                       });
-                    },
-                    maxLength: maxLength,
-                  ).workaroundFreezeLinuxMint(),
+                    }),
+                    child: TextField(
+                      obscureText: true,
+                      decoration: InputDecoration(
+                          labelText: '验证码',
+                          errorText: errMsg0.isNotEmpty ? errMsg0 : null),
+                      controller: p0,
+                      autofocus: true,
+                      onChanged: (value) {
+                        rxPass.value = value.trim();
+                        setState(() {
+                          errMsg0 = '';
+                          updateCanSubmit();
+                        });
+                      },
+                      maxLength: maxLength,
+                    ).workaroundFreezeLinuxMint(),
+                  ),
                 ),
               ],
             ),
@@ -1005,9 +1056,10 @@ void setPasswordDialog({VoidCallback? notEmptyCallback}) async {
                   child: TextField(
                     obscureText: true,
                     decoration: InputDecoration(
-                        labelText: translate('Confirmation'),
+                        labelText: '确认验证码',
                         errorText: errMsg1.isNotEmpty ? errMsg1 : null),
                     controller: p1,
+                    focusNode: confirmationFocusNode,
                     onChanged: (value) {
                       setState(() {
                         errMsg1 = '';
@@ -1038,20 +1090,22 @@ void setPasswordDialog({VoidCallback? notEmptyCallback}) async {
                   runSpacing: showStatusTipOnMobile ? 2.0 : 8.0,
                   spacing: 4,
                   children: rules.map((e) {
-                    var checked = e.validate(rxPass.value.trim());
+                    final checked = e.validate(rxPass.value.trim());
                     return Chip(
-                        label: Text(
-                          e.name,
-                          style: TextStyle(
-                              color: checked
-                                  ? const Color(0xFF0A9471)
-                                  : Color.fromARGB(255, 198, 86, 157)),
+                      label: Text(
+                        e.name,
+                        style: TextStyle(
+                          color: checked
+                              ? const Color(0xFF1769FF)
+                              : const Color(0xFF5F7190),
                         ),
-                        backgroundColor: checked
-                            ? const Color(0xFFD0F7ED)
-                            : Color.fromARGB(255, 247, 205, 232));
+                      ),
+                      backgroundColor: checked
+                          ? const Color(0xFFDCEBFF)
+                          : const Color(0xFFF1F6FF),
+                    );
                   }).toList(),
-                ))
+                )),
           ],
         ),
       ),
@@ -1078,10 +1132,13 @@ void setPasswordDialog({VoidCallback? notEmptyCallback}) async {
               });
               return;
             }
+            await gFFI.serverModel.updatePasswordModel();
             close();
           },
-          buttonStyle: ButtonStyle(
-              backgroundColor: MaterialStatePropertyAll(Colors.red)),
+          buttonStyle: const ButtonStyle(
+            foregroundColor: MaterialStatePropertyAll(Color(0xFFC4515C)),
+            backgroundColor: MaterialStatePropertyAll(Color(0xFFFFF3F4)),
+          ),
         );
         final okButton = dialogButton(
           "OK",
@@ -1098,9 +1155,9 @@ void setPasswordDialog({VoidCallback? notEmptyCallback}) async {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    cancelButton,
-                    const SizedBox(width: 4),
                     removeButton,
+                    const SizedBox(width: 4),
+                    cancelButton,
                     const SizedBox(width: 4),
                     okButton,
                   ],
@@ -1110,13 +1167,13 @@ void setPasswordDialog({VoidCallback? notEmptyCallback}) async {
           ];
         }
         return [
-          cancelButton,
           if (localPasswordSet) removeButton,
+          cancelButton,
           okButton,
         ];
       })(),
       onSubmit: canSubmit ? submit : null,
       onCancel: close,
     );
-  });
+  }).whenComplete(() => confirmationFocusNode?.dispose());
 }

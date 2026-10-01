@@ -2100,6 +2100,7 @@ class _CurrentDeviceCard extends StatelessWidget {
               ),
               const SizedBox(height: 8),
               Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Expanded(
                     child: Text(
@@ -2114,25 +2115,63 @@ class _CurrentDeviceCard extends StatelessWidget {
                       ),
                     ),
                   ),
-                  Container(
-                    width: 9,
-                    height: 9,
-                    decoration: BoxDecoration(
-                      color: online
-                          ? const Color(0xFF19B76B)
-                          : const Color(0xFFAAB1BD),
-                      shape: BoxShape.circle,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    online ? '在线' : '服务失联',
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: online
-                          ? const Color(0xFF19B76B)
-                          : const Color(0xFF7A8394),
-                    ),
+                  const SizedBox(width: 12),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.only(top: 3),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              width: 9,
+                              height: 9,
+                              decoration: BoxDecoration(
+                                color: online
+                                    ? const Color(0xFF19B76B)
+                                    : const Color(0xFFAAB1BD),
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              online ? '在线' : '服务失联',
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: online
+                                    ? const Color(0xFF19B76B)
+                                    : const Color(0xFF7A8394),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Tooltip(
+                        message: '设置固定验证码',
+                        child: TextButton.icon(
+                          onPressed: isChangePermanentPasswordDisabled()
+                              ? null
+                              : setPasswordDialog,
+                          icon: const Icon(
+                            Icons.lock_outline_rounded,
+                            size: 14,
+                          ),
+                          label: const Text(
+                            '验证码',
+                            style: TextStyle(fontSize: 12),
+                          ),
+                          style: TextButton.styleFrom(
+                            minimumSize: Size.zero,
+                            padding: EdgeInsets.zero,
+                            foregroundColor: const Color(0xFF1769FF),
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            visualDensity: VisualDensity.compact,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -2160,7 +2199,7 @@ class _CurrentDeviceCard extends StatelessWidget {
                     child: OutlinedButton.icon(
                       onPressed: () => _shareDevice(context),
                       icon: const Icon(Icons.share_outlined, size: 17),
-                      label: const Text('分享'),
+                      label: const Text('临时验证码'),
                       style: OutlinedButton.styleFrom(
                         minimumSize: const Size.fromHeight(48),
                         foregroundColor: const Color(0xFF1769FF),
@@ -2173,8 +2212,10 @@ class _CurrentDeviceCard extends StatelessWidget {
               const SizedBox(height: 16),
               Text(
                 serverConfigured
-                    ? '将设备 ID 和连接验证码告知伙伴，对方即可发起远程协助。'
+                    ? '将设备 ID 和验证码告知伙伴，对方即可发起远程协助。'
                     : '服务失联，远程不可用，请先配置服务器。',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   color: Theme.of(context)
                       .textTheme
@@ -2210,14 +2251,21 @@ class _CurrentDeviceCard extends StatelessWidget {
 
   Future<void> _shareDevice(BuildContext context) async {
     final model = gFFI.serverModel;
-    final text = '设备 ID：${model.serverId.text}\n'
-        '连接验证码：${model.serverPasswd.text}';
+    final password = model.serverPasswd.text;
+    final hasTemporaryPassword = password.isNotEmpty && password != '-';
+    final text = hasTemporaryPassword
+        ? '设备 ID：${model.serverId.text}\n临时验证码：$password'
+        : '设备 ID：${model.serverId.text}\n临时验证码：未启用，请使用固定验证码';
     await Clipboard.setData(ClipboardData(text: text));
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('设备连接信息已复制，可粘贴发送给伙伴'),
-          duration: Duration(seconds: 2),
+        SnackBar(
+          content: Text(
+            hasTemporaryPassword
+                ? '设备 ID 与临时验证码已复制，可粘贴发送给伙伴'
+                : '设备 ID 已复制，当前未启用临时验证码',
+          ),
+          duration: const Duration(seconds: 2),
         ),
       );
     }

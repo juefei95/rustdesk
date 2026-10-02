@@ -102,6 +102,10 @@ lazy_static::lazy_static! {
 }
 
 const DIANLIAN_STABLE_MANIFEST_URL: &str = "https://download.zhenhaiedu.top/stable.json";
+const DIANLIAN_UPDATE_LAST_SUCCESS_OPTION: &str = "simplelink-update-last-success";
+const DIANLIAN_MANUAL_UPDATE_CHECK_OPTION: &str = "simplelink-manual-update-check";
+const DIANLIAN_UPDATE_CHECK_INTERVAL_SECS: u64 = 24 * 60 * 60;
+const DIANLIAN_UPDATE_START_DELAY_SECS: u64 = 12;
 
 #[derive(Deserialize)]
 struct DianLianStableManifest {
@@ -958,9 +962,49 @@ pub fn is_modifier(evt: &KeyEvent) -> bool {
 
 pub fn check_software_update() {
     if is_custom_client() || get_app_name() == "DianLianRemoteAssistant" {
+        let manual = LocalConfig::get_option(DIANLIAN_MANUAL_UPDATE_CHECK_OPTION) == "Y";
+        if manual {
+            LocalConfig::set_option(
+                DIANLIAN_MANUAL_UPDATE_CHECK_OPTION.to_owned(),
+                String::new(),
+            );
+        } else {
+            let opt = LocalConfig::get_option(keys::OPTION_ENABLE_CHECK_UPDATE);
+            if !config::option2bool(keys::OPTION_ENABLE_CHECK_UPDATE, &opt) {
+                return;
+            }
+
+            let last_success = LocalConfig::get_option(DIANLIAN_UPDATE_LAST_SUCCESS_OPTION)
+                .parse::<u64>()
+                .unwrap_or_default();
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs();
+            if now.saturating_sub(last_success) < DIANLIAN_UPDATE_CHECK_INTERVAL_SECS {
+                return;
+            }
+        }
         std::thread::spawn(move || {
-            if let Err(err) = do_check_dianlian_software_update() {
-                log::warn!("Failed to check DianLian software update: {}", err);
+            if !manual {
+                std::thread::sleep(std::time::Duration::from_secs(
+                    DIANLIAN_UPDATE_START_DELAY_SECS,
+                ));
+            }
+            match do_check_dianlian_software_update() {
+                Ok(()) => {
+                    let now = std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .unwrap_or_default()
+                        .as_secs();
+                    LocalConfig::set_option(
+                        DIANLIAN_UPDATE_LAST_SUCCESS_OPTION.to_owned(),
+                        now.to_string(),
+                    );
+                }
+                Err(err) => {
+                    log::warn!("Failed to check DianLian software update: {}", err);
+                }
             }
         });
         return;

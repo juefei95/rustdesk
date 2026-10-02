@@ -21,6 +21,7 @@ import 'package:window_manager/window_manager.dart';
 
 const _simpleLinkAutoStartOption = 'simplelink-auto-start';
 const _simpleLinkCloseToTrayOption = 'simplelink-close-to-tray';
+const _simpleLinkManualUpdateCheckOption = 'simplelink-manual-update-check';
 
 class SimpleLinkDesktopPage extends StatefulWidget {
   const SimpleLinkDesktopPage({
@@ -3562,10 +3563,12 @@ class _SimpleLinkSettingsPageState extends State<_SimpleLinkSettingsPage> {
   static const _brandColor = Color(0xFF1769FF);
 
   late bool _autoStart;
+  late bool _checkUpdates;
   late bool _closeToTray;
   late bool _udpPunch;
   late bool _ipv6Punch;
   late bool _savedAutoStart;
+  late bool _savedCheckUpdates;
   late bool _savedCloseToTray;
   late bool _savedUdpPunch;
   late bool _savedIpv6Punch;
@@ -3575,6 +3578,8 @@ class _SimpleLinkSettingsPageState extends State<_SimpleLinkSettingsPage> {
     super.initState();
     _savedAutoStart =
         bind.mainGetLocalOption(key: _simpleLinkAutoStartOption) != 'N';
+    _savedCheckUpdates =
+        bind.mainGetLocalOption(key: kOptionEnableCheckUpdate) != 'N';
     _savedCloseToTray =
         bind.mainGetLocalOption(key: _simpleLinkCloseToTrayOption) != 'N';
     _savedUdpPunch =
@@ -3582,6 +3587,7 @@ class _SimpleLinkSettingsPageState extends State<_SimpleLinkSettingsPage> {
     _savedIpv6Punch =
         bind.mainGetLocalOption(key: kOptionEnableIpv6Punch) == 'Y';
     _autoStart = _savedAutoStart;
+    _checkUpdates = _savedCheckUpdates;
     _closeToTray = _savedCloseToTray;
     _udpPunch = _savedUdpPunch;
     _ipv6Punch = _savedIpv6Punch;
@@ -3631,8 +3637,12 @@ class _SimpleLinkSettingsPageState extends State<_SimpleLinkSettingsPage> {
     );
   }
 
-  void _checkForUpdate() {
+  Future<void> _checkForUpdate() async {
     showToast('正在检查更新');
+    await bind.mainSetLocalOption(
+      key: _simpleLinkManualUpdateCheckOption,
+      value: 'Y',
+    );
     bind.mainGetSoftwareUpdateUrl();
   }
 
@@ -3730,6 +3740,7 @@ class _SimpleLinkSettingsPageState extends State<_SimpleLinkSettingsPage> {
       key: _simpleLinkAutoStartOption,
       value: _autoStart ? 'Y' : 'N',
     );
+    await mainSetLocalBoolOption(kOptionEnableCheckUpdate, _checkUpdates);
     await bind.mainSetLocalOption(
       key: _simpleLinkCloseToTrayOption,
       value: _closeToTray ? 'Y' : 'N',
@@ -3739,6 +3750,7 @@ class _SimpleLinkSettingsPageState extends State<_SimpleLinkSettingsPage> {
     if (!mounted) return;
     setState(() {
       _savedAutoStart = _autoStart;
+      _savedCheckUpdates = _checkUpdates;
       _savedCloseToTray = _closeToTray;
       _savedUdpPunch = _udpPunch;
       _savedIpv6Punch = _ipv6Punch;
@@ -3749,6 +3761,7 @@ class _SimpleLinkSettingsPageState extends State<_SimpleLinkSettingsPage> {
   void _cancel() {
     setState(() {
       _autoStart = _savedAutoStart;
+      _checkUpdates = _savedCheckUpdates;
       _closeToTray = _savedCloseToTray;
       _udpPunch = _savedUdpPunch;
       _ipv6Punch = _savedIpv6Punch;
@@ -3762,6 +3775,7 @@ class _SimpleLinkSettingsPageState extends State<_SimpleLinkSettingsPage> {
   void _restoreDefaults() {
     setState(() {
       _autoStart = true;
+      _checkUpdates = true;
       _closeToTray = true;
       _udpPunch = true;
       _ipv6Punch = false;
@@ -3818,6 +3832,12 @@ class _SimpleLinkSettingsPageState extends State<_SimpleLinkSettingsPage> {
                             value: _autoStart,
                             onChanged: (value) =>
                                 setState(() => _autoStart = value),
+                          ),
+                          _SettingsCheckRow(
+                            title: '启动时检查更新',
+                            value: _checkUpdates,
+                            onChanged: (value) =>
+                                setState(() => _checkUpdates = value),
                           ),
                           _SettingsCheckRow(
                             title: '关闭窗口时最小化到托盘',

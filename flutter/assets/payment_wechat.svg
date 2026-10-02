@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <rect x="32" y="32" width="448" height="448" rx="96" fill="#07C160"/>
+
+  <!-- Centered WeChat-style mark -->
+  <g transform="translate(-1,-54)">
+    <!-- Back chat bubble -->
+    <path fill="#FFFFFF" d="
+      M208 142
+      C128 142 70 191 70 255
+      C70 297 96 333 138 352
+      L126 390
+      C124 397 132 403 138 399
+      L177 372
+      C188 374 197 376 208 376
+      C288 376 346 327 346 255
+      C346 191 288 142 208 142
+      Z"/>
+    <circle cx="165" cy="236" r="13" fill="#07C160"/>
+    <circle cx="251" cy="236" r="13" fill="#07C160"/>
+
+    <!-- Front chat bubble -->
+    <path fill="#FFFFFF" d="
+      M318 245
+      C245 245 192 289 192 348
+      C192 407 245 451 318 451
+      C329 451 340 450 350 448
+      L390 474
+      C396 478 403 472 401 465
+      L390 430
+      C423 410 444 380 444 348
+      C444 289 391 245 318 245
+      Z"/>
+    <circle cx="280" cy="333" r="11" fill="#07C160"/>
+    <circle cx="356" cy="333" r="11" fill="#07C160"/>
+  </g>
+</svg>

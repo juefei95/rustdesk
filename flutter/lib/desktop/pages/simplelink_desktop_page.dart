@@ -2,7 +2,9 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' as material;
 import 'package:flutter/services.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_hbb/common.dart';
 import 'package:flutter_hbb/common/formatter/id_formatter.dart';
 import 'package:flutter_hbb/common/widgets/login.dart';
@@ -3194,32 +3196,279 @@ class _MembershipPageState extends State<_MembershipPage> {
       widget.onLogin();
       return;
     }
+    var selectedPayType = 'alipay';
     final payType = await showDialog<String>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text('开通${package.name}'),
-        content: const Text('请选择支付方式，支付完成后会员权益会自动到账。'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('取消'),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => material.Dialog(
+          insetPadding: const EdgeInsets.symmetric(horizontal: 24),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
           ),
-          OutlinedButton.icon(
-            onPressed: () => Navigator.of(context).pop('alipay'),
-            icon: const Icon(Icons.account_balance_wallet_outlined),
-            label: const Text('支付宝'),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 440),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(24, 20, 24, 20),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          '开通${package.name}',
+                          style: const TextStyle(
+                            color: Color(0xFF17203A),
+                            fontSize: 22,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        tooltip: '关闭',
+                        onPressed: () => Navigator.of(context).pop(),
+                        icon: const Icon(Icons.close_rounded),
+                        color: const Color(0xFF98A2B3),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 14),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFF6EB),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 48,
+                          height: 48,
+                          decoration: const BoxDecoration(
+                            color: Color(0xFFFFE7BD),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.workspace_premium_rounded,
+                            color: Color(0xFFFFA400),
+                            size: 28,
+                          ),
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                package.name,
+                                style: const TextStyle(
+                                  color: Color(0xFF17203A),
+                                  fontSize: 17,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                package.description.isEmpty
+                                    ? '畅享会员专属权益'
+                                    : package.description,
+                                style: const TextStyle(
+                                  color: Color(0xFF75809A),
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Container(
+                          width: 1,
+                          height: 40,
+                          color: const Color(0xFFF4DCC1),
+                        ),
+                        const SizedBox(width: 14),
+                        Text(
+                          '¥${package.price}',
+                          style: const TextStyle(
+                            color: Color(0xFFFF5A1F),
+                            fontSize: 26,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  const Text(
+                    '请选择支付方式',
+                    style: TextStyle(
+                      color: Color(0xFF17203A),
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  _buildPaymentMethod(
+                    selected: selectedPayType == 'alipay',
+                    title: '支付宝支付',
+                    subtitle: '推荐使用支付宝，安全快捷',
+                    assetPath: 'assets/payment_alipay.svg',
+                    onTap: () => setDialogState(() {
+                      selectedPayType = 'alipay';
+                    }),
+                  ),
+                  const SizedBox(height: 10),
+                  _buildPaymentMethod(
+                    selected: selectedPayType == 'wechat',
+                    title: '微信支付',
+                    subtitle: '使用微信支付，方便快捷',
+                    assetPath: 'assets/payment_wechat.svg',
+                    onTap: () => setDialogState(() {
+                      selectedPayType = 'wechat';
+                    }),
+                  ),
+                  const SizedBox(height: 14),
+                  const Row(
+                    children: [
+                      Icon(
+                        Icons.info_outline_rounded,
+                        color: Color(0xFF98A2B3),
+                        size: 20,
+                      ),
+                      SizedBox(width: 8),
+                      Text(
+                        '支付完成后会员权益会自动到账',
+                        style:
+                            TextStyle(color: Color(0xFF7A8499), fontSize: 14),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 28),
+                  Row(
+                    children: [
+                      SizedBox(
+                        width: 116,
+                        height: 42,
+                        child: OutlinedButton(
+                          onPressed: () => Navigator.of(context).pop(),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: const Color(0xFF667085),
+                            side: const BorderSide(color: Color(0xFFE3E8F0)),
+                          ),
+                          child: const Text(
+                            '取消',
+                            style: TextStyle(
+                                fontSize: 15, fontWeight: FontWeight.w700),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: SizedBox(
+                          height: 42,
+                          child: FilledButton(
+                            onPressed: () => Navigator.of(context)
+                                .pop(selectedPayType),
+                            child: Text(
+                              '立即支付 ¥${package.price}',
+                              style: const TextStyle(
+                                  fontSize: 15, fontWeight: FontWeight.w800),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
           ),
-          FilledButton.icon(
-            onPressed: () => Navigator.of(context).pop('wechat'),
-            icon: const Icon(Icons.chat_bubble_outline),
-            label: const Text('微信支付'),
-          ),
-        ],
+        ),
       ),
     );
     if (payType != null) {
       await _createPayment(package, payType);
     }
+  }
+
+  Widget _buildPaymentMethod({
+    required bool selected,
+    required String title,
+    required String subtitle,
+    required String assetPath,
+    required VoidCallback onTap,
+  }) {
+    return Semantics(
+      selected: selected,
+      button: true,
+      label: title,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          height: 70,
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          decoration: BoxDecoration(
+            color: selected ? const Color(0xFFF5F9FF) : Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: selected
+                  ? const Color(0xFF1769FF)
+                  : const Color(0xFFE3E8F0),
+              width: selected ? 1.5 : 1,
+            ),
+          ),
+          child: Row(
+            children: [
+              SizedBox(
+                width: 42,
+                height: 42,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(11),
+                  child: SvgPicture.asset(
+                    assetPath,
+                    fit: BoxFit.cover,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        color: Color(0xFF17203A),
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      subtitle,
+                      style: const TextStyle(
+                        color: Color(0xFF7A8499),
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(
+                selected ? Icons.radio_button_checked : Icons.radio_button_off,
+                color: selected
+                    ? const Color(0xFF1769FF)
+                    : const Color(0xFFC8D0DE),
+                size: 24,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   Future<void> _createPayment(

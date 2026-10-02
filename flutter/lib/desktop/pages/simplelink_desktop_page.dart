@@ -13,6 +13,7 @@ import 'package:flutter_hbb/models/peer_model.dart';
 import 'package:flutter_hbb/models/platform_model.dart';
 import 'package:flutter_hbb/models/remote_control_api.dart';
 import 'package:get/get.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:window_manager/window_manager.dart';
 
@@ -1800,7 +1801,7 @@ class _ProductHomePage extends StatelessWidget {
                 IgnorePointer(child: CustomPaint(painter: _HomeWavePainter())),
           ),
           SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(28, 24, 28, 48),
+            padding: const EdgeInsets.fromLTRB(28, 16, 28, 16),
             child: Center(
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 980),
@@ -1832,7 +1833,7 @@ class _HomeTwoColumnLayout extends StatelessWidget {
         final leftColumn = Column(
           children: [
             const _CurrentDeviceCard(),
-            const SizedBox(height: 24),
+            const SizedBox(height: 16),
             _RecentSessionsCard(onMore: onOpenDevices),
           ],
         );
@@ -1874,7 +1875,7 @@ class _LoginBanner extends StatelessWidget {
         final expiryLabel = isPaidMember ? '会员到期时间' : '体验到期时间';
         return Container(
           height: isLoggedIn ? 62 : 44,
-          margin: const EdgeInsets.only(bottom: 24),
+              margin: const EdgeInsets.only(bottom: 16),
           padding: const EdgeInsets.symmetric(horizontal: 18),
           decoration: BoxDecoration(
             color: const Color(0xFFEAF3FF),
@@ -2939,10 +2940,45 @@ String _platformLabel(String platform) {
   return 'Windows';
 }
 
-class _MembershipPage extends StatelessWidget {
+class _MembershipPage extends StatefulWidget {
   const _MembershipPage({required this.onLogin});
 
   final VoidCallback onLogin;
+
+  @override
+  State<_MembershipPage> createState() => _MembershipPageState();
+}
+
+class _MembershipPageState extends State<_MembershipPage> {
+  List<RemoteControlPackage> _packages = const [];
+  bool _loadingPackages = true;
+  String? _packageError;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadPackages();
+  }
+
+  Future<void> _loadPackages() async {
+    setState(() {
+      _loadingPackages = true;
+      _packageError = null;
+    });
+    try {
+      final packages = await RemoteControlApi.packages();
+      if (!mounted) return;
+      setState(() => _packages = packages);
+    } on RemoteControlApiException catch (error) {
+      if (!mounted) return;
+      setState(() => _packageError = error.message);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _packageError = '套餐加载失败，请稍后重试');
+    } finally {
+      if (mounted) setState(() => _loadingPackages = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -2975,35 +3011,7 @@ class _MembershipPage extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 18),
-              const Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: _PlanCard(
-                      days: '1天',
-                      price: '¥0.99',
-                      subtitle: '临时应急',
-                    ),
-                  ),
-                  SizedBox(width: 16),
-                  Expanded(
-                    child: _PlanCard(
-                      days: '7天',
-                      price: '¥2.99',
-                      subtitle: '短期使用',
-                    ),
-                  ),
-                  SizedBox(width: 16),
-                  Expanded(
-                    child: _PlanCard(
-                      days: '30天',
-                      price: '¥6.99',
-                      subtitle: '长期使用、主推',
-                      recommended: true,
-                    ),
-                  ),
-                ],
-              ),
+              _buildPackages(),
               const SizedBox(height: 34),
               Row(
                 children: const [
@@ -3096,7 +3104,7 @@ class _MembershipPage extends StatelessWidget {
                   width: 86,
                   height: 38,
                   child: ElevatedButton(
-                    onPressed: onLogin,
+                    onPressed: widget.onLogin,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF1769FF),
                       foregroundColor: Colors.white,
@@ -3123,6 +3131,173 @@ class _MembershipPage extends StatelessWidget {
         ),
       );
     });
+  }
+
+  Widget _buildPackages() {
+    if (_loadingPackages) {
+      return const SizedBox(
+        height: 350,
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
+    if (_packageError != null) {
+      return SizedBox(
+        height: 350,
+        child: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                _packageError!,
+                style: const TextStyle(color: Color(0xFF667085)),
+              ),
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                onPressed: _loadPackages,
+                icon: const Icon(Icons.refresh_rounded),
+                label: const Text('重新加载'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+    if (_packages.isEmpty) {
+      return const SizedBox(
+        height: 350,
+        child: Center(
+          child: Text(
+            '暂未配置可购买套餐',
+            style: TextStyle(color: Color(0xFF667085)),
+          ),
+        ),
+      );
+    }
+    return Wrap(
+      spacing: 12,
+      runSpacing: 12,
+      children: _packages
+          .map((package) => SizedBox(
+                width: 260,
+                child: _PlanCard(
+                  package: package,
+                  onSubscribe: () => _choosePayment(package),
+                ),
+              ))
+          .toList(),
+    );
+  }
+
+  Future<void> _choosePayment(RemoteControlPackage package) async {
+    if (gFFI.userModel.userName.value.isEmpty) {
+      showToast('请先登录后再开通会员');
+      widget.onLogin();
+      return;
+    }
+    final payType = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('开通${package.name}'),
+        content: const Text('请选择支付方式，支付完成后会员权益会自动到账。'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('取消'),
+          ),
+          OutlinedButton.icon(
+            onPressed: () => Navigator.of(context).pop('alipay'),
+            icon: const Icon(Icons.account_balance_wallet_outlined),
+            label: const Text('支付宝'),
+          ),
+          FilledButton.icon(
+            onPressed: () => Navigator.of(context).pop('wechat'),
+            icon: const Icon(Icons.chat_bubble_outline),
+            label: const Text('微信支付'),
+          ),
+        ],
+      ),
+    );
+    if (payType != null) {
+      await _createPayment(package, payType);
+    }
+  }
+
+  Future<void> _createPayment(
+      RemoteControlPackage package, String payType) async {
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(child: CircularProgressIndicator()),
+    );
+    try {
+      final order =
+          await RemoteControlApi.createPaymentOrder(package.id, payType);
+      if (!mounted) return;
+      Navigator.of(context).pop();
+      final qrCodeUrl = order.qrCodeUrl;
+      if (qrCodeUrl == null) {
+        showToast('支付服务未返回扫码链接，请检查后端支付配置');
+        return;
+      }
+      await _showPaymentQr(package, payType, order, qrCodeUrl);
+    } on RemoteControlApiException catch (error) {
+      if (!mounted) return;
+      Navigator.of(context).pop();
+      showToast(error.message);
+    } catch (_) {
+      if (!mounted) return;
+      Navigator.of(context).pop();
+      showToast('创建订单失败，请稍后重试');
+    }
+  }
+
+  Future<void> _showPaymentQr(RemoteControlPackage package, String payType,
+      RemoteControlPaymentOrder order, String qrCodeUrl) async {
+    Timer? timer;
+    var completed = false;
+    final dialog = showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(payType == 'wechat' ? '微信扫码支付' : '支付宝扫码支付'),
+        content: SizedBox(
+          width: 260,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('${package.name}  ¥${package.price}'),
+              const SizedBox(height: 16),
+              QrImageView(data: qrCodeUrl, size: 220),
+              const SizedBox(height: 14),
+              const Text('请使用对应 App 扫码完成支付',
+                  style: TextStyle(color: Color(0xFF667085))),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('取消'),
+          ),
+        ],
+      ),
+    );
+    timer = Timer.periodic(const Duration(seconds: 3), (_) async {
+      if (completed) return;
+      try {
+        if (await RemoteControlApi.isPaymentComplete(order.orderNo)) {
+          completed = true;
+          timer?.cancel();
+          if (mounted) {
+            Navigator.of(context, rootNavigator: true).pop();
+            gFFI.userModel.remoteMembership.value =
+                await RemoteControlApi.membershipStatus();
+            showToast('支付成功，会员权益已到账');
+          }
+        }
+      } catch (_) {}
+    });
+    await dialog;
+    timer?.cancel();
   }
 }
 
@@ -3597,30 +3772,26 @@ class _SettingsActionRow extends StatelessWidget {
 
 class _PlanCard extends StatelessWidget {
   const _PlanCard({
-    required this.days,
-    required this.price,
-    required this.subtitle,
-    this.recommended = false,
+    required this.package,
+    required this.onSubscribe,
   });
 
-  final String days;
-  final String price;
-  final String subtitle;
-  final bool recommended;
+  final RemoteControlPackage package;
+  final VoidCallback onSubscribe;
 
   @override
   Widget build(BuildContext context) {
     const brandColor = Color(0xFF1769FF);
     const features = ['远程连接', '文件传输', '高清画质', '多设备使用'];
     return Container(
-      height: 350,
+      height: 316,
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
-        color: recommended ? const Color(0xFFF7FBFF) : Colors.white,
+        color: package.recommended ? const Color(0xFFF7FBFF) : Colors.white,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
-          color: recommended ? brandColor : const Color(0xFFDDE5F0),
-          width: recommended ? 2 : 1,
+          color: package.recommended ? brandColor : const Color(0xFFDDE5F0),
+          width: package.recommended ? 2 : 1,
         ),
         boxShadow: const [
           BoxShadow(
@@ -3632,7 +3803,7 @@ class _PlanCard extends StatelessWidget {
       ),
       child: Stack(
         children: [
-          if (recommended)
+          if (package.recommended)
             Positioned(
               top: 0,
               right: 0,
@@ -3657,7 +3828,7 @@ class _PlanCard extends StatelessWidget {
               ),
             ),
           Padding(
-            padding: const EdgeInsets.fromLTRB(24, 24, 24, 22),
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 18),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -3668,41 +3839,43 @@ class _PlanCard extends StatelessWidget {
                       color: brandColor,
                       size: 24,
                     ),
-                    const SizedBox(width: 14),
+                    const SizedBox(width: 10),
                     Text(
-                      days,
+                      '${package.days}天',
                       style: const TextStyle(
                         color: Color(0xFF111827),
-                        fontSize: 24,
+                        fontSize: 22,
                         fontWeight: FontWeight.w800,
                       ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 8),
                 Text(
-                  price,
+                  '¥${package.price}',
                   style: const TextStyle(
                     color: brandColor,
-                    fontSize: 34,
+                    fontSize: 30,
                     fontWeight: FontWeight.w900,
                   ),
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  subtitle,
+                  package.description.isEmpty
+                      ? package.name
+                      : package.description,
                   style: const TextStyle(
                     color: Color(0xFF4B5563),
                     fontSize: 17,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
-                const SizedBox(height: 14),
-                const Divider(color: Color(0xFFDDE5F0), height: 1),
                 const SizedBox(height: 10),
+                const Divider(color: Color(0xFFDDE5F0), height: 1),
+                const SizedBox(height: 8),
                 for (final feature in features)
                   Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
+                    padding: const EdgeInsets.only(bottom: 5),
                     child: Row(
                       children: [
                         const Icon(
@@ -3710,13 +3883,13 @@ class _PlanCard extends StatelessWidget {
                           color: brandColor,
                           size: 20,
                         ),
-                        const SizedBox(width: 12),
+                        const SizedBox(width: 8),
                         Expanded(
                           child: Text(
                             feature,
                             style: const TextStyle(
                               color: Color(0xFF344054),
-                              fontSize: 15,
+                              fontSize: 14,
                               fontWeight: FontWeight.w500,
                             ),
                           ),
@@ -3728,9 +3901,9 @@ class _PlanCard extends StatelessWidget {
                 SizedBox(
                   width: double.infinity,
                   height: 40,
-                  child: recommended
+                  child: package.recommended
                       ? ElevatedButton(
-                          onPressed: () => showToast('支付功能暂未接入'),
+                          onPressed: onSubscribe,
                           style: ElevatedButton.styleFrom(
                             backgroundColor: brandColor,
                             foregroundColor: Colors.white,
@@ -3748,7 +3921,7 @@ class _PlanCard extends StatelessWidget {
                           ),
                         )
                       : OutlinedButton(
-                          onPressed: () => showToast('支付功能暂未接入'),
+                          onPressed: onSubscribe,
                           style: OutlinedButton.styleFrom(
                             foregroundColor: brandColor,
                             side: const BorderSide(color: Color(0xFF94BFFF)),

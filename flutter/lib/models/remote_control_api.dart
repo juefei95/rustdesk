@@ -51,6 +51,66 @@ class RemoteControlMembership {
   bool get hasPaidMembership => packageName.isNotEmpty;
 }
 
+class RemoteControlPackage {
+  const RemoteControlPackage({
+    required this.id,
+    required this.name,
+    required this.days,
+    required this.price,
+    required this.recommended,
+    required this.description,
+  });
+
+  final int id;
+  final String name;
+  final int days;
+  final String price;
+  final bool recommended;
+  final String description;
+
+  factory RemoteControlPackage.fromJson(Map<String, dynamic> json) {
+    return RemoteControlPackage(
+      id: int.tryParse((json['id'] ?? '').toString()) ?? 0,
+      name: (json['name'] ?? '').toString().trim(),
+      days: int.tryParse((json['days'] ?? '').toString()) ?? 0,
+      price: (json['price'] ?? '').toString().trim(),
+      recommended: json['recommended'] == 1 || json['recommended'] == true,
+      description: (json['description'] ?? '').toString().trim(),
+    );
+  }
+}
+
+class RemoteControlPaymentOrder {
+  const RemoteControlPaymentOrder({
+    required this.orderNo,
+    required this.payment,
+  });
+
+  final String orderNo;
+  final Map<String, dynamic> payment;
+
+  String? get qrCodeUrl => _findString(payment, const [
+        'code_url',
+        'qr_code',
+        'qrcode',
+        'qr_url',
+      ]);
+
+  static String? _findString(Map<String, dynamic> value, List<String> keys) {
+    for (final entry in value.entries) {
+      if (keys.contains(entry.key) && entry.value is String) {
+        final result = (entry.value as String).trim();
+        if (result.isNotEmpty) return result;
+      }
+      if (entry.value is Map<String, dynamic>) {
+        final result = _findString(entry.value as Map<String, dynamic>, keys);
+        if (result != null) return result;
+      }
+    }
+    return null;
+  }
+}
+
 class WechatQrLoginSession {
   WechatQrLoginSession({
     required this.scene,
@@ -283,6 +343,64 @@ class RemoteControlApi {
       headers: {'token': token},
     );
     return RemoteControlMembership.fromJson(_decode(response));
+  }
+
+  static Future<List<RemoteControlPackage>> packages() async {
+    final response = await http.get(Uri.parse('$server/api/remote/packages'));
+    final packages = _decode(response)['packages'];
+    if (packages is! List) {
+      throw RemoteControlApiException('Invalid package response');
+    }
+    return packages
+        .whereType<Map<String, dynamic>>()
+        .map(RemoteControlPackage.fromJson)
+        .where((package) => package.id > 0 && package.name.isNotEmpty)
+        .toList();
+  }
+
+  static Future<RemoteControlPaymentOrder> createPaymentOrder(
+      int packageId, String payType) async {
+    final token = bind.mainGetLocalOption(key: accessTokenKey);
+    if (token.isEmpty) {
+      throw RemoteControlApiException('请先登录');
+    }
+    final response = await http.post(
+      Uri.parse('$server/api/remote/order/create'),
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'token': token,
+      },
+      body: Uri(queryParameters: {
+        'package_id': packageId.toString(),
+        'pay_type': payType,
+      }).query,
+    );
+    final data = _decode(response);
+    final order = data['order'];
+    final payment = data['payment'];
+    if (order is! Map<String, dynamic> || payment is! Map<String, dynamic>) {
+      throw RemoteControlApiException('Invalid payment response');
+    }
+    final orderNo = (order['order_no'] ?? '').toString().trim();
+    if (orderNo.isEmpty) {
+      throw RemoteControlApiException('Payment response contains no order number');
+    }
+    return RemoteControlPaymentOrder(orderNo: orderNo, payment: payment);
+  }
+
+  static Future<bool> isPaymentComplete(String orderNo) async {
+    final token = bind.mainGetLocalOption(key: accessTokenKey);
+    if (token.isEmpty) {
+      throw RemoteControlApiException('请先登录');
+    }
+    final uri = Uri.parse('$server/api/remote/order/status')
+        .replace(queryParameters: {'order_no': orderNo});
+    final response = await http.get(uri, headers: {'token': token});
+    final order = _decode(response)['order'];
+    if (order is! Map<String, dynamic>) {
+      throw RemoteControlApiException('Invalid order status response');
+    }
+    return order['status'] == 1 || order['status'] == '1';
   }
 
   static Future<bool> canControl() async {

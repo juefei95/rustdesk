@@ -968,6 +968,7 @@ _connectDialog(
   String? osAccountDescTip,
 }) async {
   final errUsername = ''.obs;
+  final useVerificationCode = bind.isCustomClient();
   var rememberPassword = false;
   if (passwordController != null) {
     rememberPassword =
@@ -1086,13 +1087,17 @@ _connectDialog(
       }
       return Column(
         children: [
-          descWidget(translate('verify_rustdesk_password_tip')),
+          descWidget(useVerificationCode
+              ? '验证被控制端验证码'
+              : translate('verify_rustdesk_password_tip')),
           PasswordWidget(
             controller: passwordController,
             autoFocus: osUsernameController == null,
+            title: useVerificationCode ? '验证码' : null,
+            hintText: useVerificationCode ? '请输入验证码' : null,
           ),
           rememberWidget(
-            translate('Remember password'),
+            useVerificationCode ? '记住验证码' : translate('Remember password'),
             rememberPassword,
             (v) {
               if (v != null) {
@@ -1108,8 +1113,14 @@ _connectDialog(
       title: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.password_rounded, color: MyTheme.accent),
-          Text(translate('Password Required')).paddingOnly(left: 10),
+          Icon(
+            useVerificationCode
+                ? Icons.verified_user_outlined
+                : Icons.password_rounded,
+            color: MyTheme.accent,
+          ),
+          Text(useVerificationCode ? '需要验证码' : translate('Password Required'))
+              .paddingOnly(left: 10),
         ],
       ),
       content: Column(mainAxisSize: MainAxisSize.min, children: [

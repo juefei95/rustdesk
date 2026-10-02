@@ -2436,6 +2436,7 @@ class _RecentSessionsCardState extends State<_RecentSessionsCard> {
   static const _onlineRefreshInterval = Duration(seconds: 15);
 
   Timer? _onlineRefreshTimer;
+  final ScrollController _scrollController = ScrollController();
 
   @override
   void initState() {
@@ -2448,6 +2449,7 @@ class _RecentSessionsCardState extends State<_RecentSessionsCard> {
   @override
   void dispose() {
     _onlineRefreshTimer?.cancel();
+    _scrollController.dispose();
     super.dispose();
   }
 
@@ -2504,7 +2506,7 @@ class _RecentSessionsCardState extends State<_RecentSessionsCard> {
               child: AnimatedBuilder(
                 animation: gFFI.recentPeersModel,
                 builder: (context, child) {
-                  final peers = gFFI.recentPeersModel.peers.take(3).toList();
+                  final peers = gFFI.recentPeersModel.peers;
                   if (peers.isEmpty) {
                     return const Center(
                       child: Text(
@@ -2513,10 +2515,16 @@ class _RecentSessionsCardState extends State<_RecentSessionsCard> {
                       ),
                     );
                   }
-                  return Column(
-                    children: [
-                      for (final peer in peers) _RecentPeerRow(peer: peer),
-                    ],
+                  return Scrollbar(
+                    controller: _scrollController,
+                    thumbVisibility: true,
+                    child: ListView.builder(
+                      controller: _scrollController,
+                      padding: EdgeInsets.zero,
+                      itemCount: peers.length,
+                      itemBuilder: (context, index) =>
+                          _RecentPeerRow(peer: peers[index]),
+                    ),
                   );
                 },
               ),
@@ -2747,10 +2755,18 @@ class _DeviceListPage extends StatefulWidget {
 }
 
 class _DeviceListPageState extends State<_DeviceListPage> {
+  final ScrollController _scrollController = ScrollController();
+
   @override
   void initState() {
     super.initState();
     bind.mainLoadRecentPeers();
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
   }
 
   @override
@@ -2763,15 +2779,18 @@ class _DeviceListPageState extends State<_DeviceListPage> {
           final peers = gFFI.recentPeersModel.peers
               .where((peer) => peer.id != gFFI.id)
               .toList();
-          return SingleChildScrollView(
-            padding: const EdgeInsets.all(28),
-            child: Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 980),
-                child: _ProductCard(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
+          return LayoutBuilder(
+            builder: (context, constraints) => Padding(
+              padding: const EdgeInsets.all(28),
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 980),
+                  child: SizedBox(
+                    height: constraints.maxHeight,
+                    child: _ProductCard(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
                       const _DeviceSectionHeader(
                         title: '最近连接',
                         icon: Icons.history_rounded,
@@ -2794,43 +2813,57 @@ class _DeviceListPageState extends State<_DeviceListPage> {
                         ],
                       ),
                       const Divider(height: 20),
-                      _DeviceListRow(
-                        name: '本机设备',
-                        platform: _platformLabel(kPeerPlatformWindows),
-                        id: gFFI.id,
-                        online: true,
-                        isCurrent: true,
-                      ),
-                      ...peers.map(
-                        (peer) => _DeviceListRow(
-                          name: peer.alias.isNotEmpty
-                              ? peer.alias
-                              : (peer.hostname.isNotEmpty
-                                  ? peer.hostname
-                                  : peer.username.isNotEmpty
-                                      ? peer.username
-                                      : peer.id),
-                          platform: _platformLabel(peer.platform),
-                          id: peer.id,
-                          online: peer.online,
-                          onTap: () => connect(context, peer.id),
-                        ),
-                      ),
-                      if (peers.isEmpty)
-                        const Padding(
-                          padding: EdgeInsets.symmetric(vertical: 36),
-                          child: Center(
-                            child: Text(
-                              '暂无其他设备，输入设备 ID 即可快速连接',
-                              style: TextStyle(color: Color(0xFF8A93A3)),
-                            ),
+                      Expanded(
+                        child: Scrollbar(
+                          controller: _scrollController,
+                          thumbVisibility: true,
+                          child: ListView(
+                            controller: _scrollController,
+                            padding: EdgeInsets.zero,
+                            children: [
+                              _DeviceListRow(
+                                name: '本机设备',
+                                platform: _platformLabel(kPeerPlatformWindows),
+                                id: gFFI.id,
+                                online: true,
+                                isCurrent: true,
+                              ),
+                              ...peers.map(
+                                (peer) => _DeviceListRow(
+                                  name: peer.alias.isNotEmpty
+                                      ? peer.alias
+                                      : (peer.hostname.isNotEmpty
+                                          ? peer.hostname
+                                          : peer.username.isNotEmpty
+                                              ? peer.username
+                                              : peer.id),
+                                  platform: _platformLabel(peer.platform),
+                                  id: peer.id,
+                                  online: peer.online,
+                                  onTap: () => connect(context, peer.id),
+                                ),
+                              ),
+                              if (peers.isEmpty)
+                                const Padding(
+                                  padding: EdgeInsets.symmetric(vertical: 36),
+                                  child: Center(
+                                    child: Text(
+                                      '暂无其他设备，输入设备 ID 即可快速连接',
+                                      style: TextStyle(color: Color(0xFF8A93A3)),
+                                    ),
+                                  ),
+                                ),
+                            ],
                           ),
                         ),
+                      ),
                     ],
                   ),
                 ),
               ),
             ),
+          ),
+        ),
           );
         },
       ),

@@ -30,12 +30,16 @@ class RemoteControlMembership {
     required this.trialGiven,
     required this.packageName,
     required this.expireTime,
+    required this.remainingSeconds,
+    required this.controlEnabled,
   });
 
   final bool canControl;
   final bool trialGiven;
   final String packageName;
   final String expireTime;
+  final int remainingSeconds;
+  final bool? controlEnabled;
 
   factory RemoteControlMembership.fromJson(Map<String, dynamic> json) {
     return RemoteControlMembership(
@@ -43,12 +47,33 @@ class RemoteControlMembership {
       trialGiven: json['trial_given'] == 1 || json['trial_given'] == true,
       packageName: (json['package_name'] ?? '').toString().trim(),
       expireTime: (json['expire_time'] ?? '').toString().trim(),
+      remainingSeconds:
+          int.tryParse((json['remaining_seconds'] ?? '').toString()) ?? 0,
+      controlEnabled: json['control_enabled'] == null
+          ? null
+          : json['control_enabled'] == 1 || json['control_enabled'] == true,
     );
   }
 
   String get entitlementName => packageName.isNotEmpty ? packageName : '免费版';
 
   bool get hasPaidMembership => packageName.isNotEmpty;
+
+  bool get isEntitlementExpired =>
+      expireTime.isNotEmpty && remainingSeconds <= 0;
+
+  String get noControlMessage {
+    if (isEntitlementExpired) {
+      return '会员权益已到期，请前往会员中心重新开通后继续使用远程控制。';
+    }
+    if (!trialGiven && !hasPaidMembership) {
+      return '当前账号暂无远程控制权限，可以领取体验或升级权益。';
+    }
+    if (controlEnabled == false) {
+      return '当前账号暂无远程控制权限，原因：控制权限已被管理员禁用。';
+    }
+    return '当前账号暂无远程控制权限，原因：会员权益状态异常，请联系管理员。';
+  }
 }
 
 class RemoteControlPackage {
@@ -319,6 +344,8 @@ class RemoteControlApi {
               trialGiven: false,
               packageName: '',
               expireTime: '',
+              remainingSeconds: 0,
+              controlEnabled: null,
             ),
     );
   }

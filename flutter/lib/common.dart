@@ -2595,8 +2595,9 @@ connect(BuildContext context, String id,
       return;
     }
     try {
-      if (!(await RemoteControlApi.canControl())) {
-        showToast('当前账号暂无远程控制权限');
+      final membership = await RemoteControlApi.membershipStatus();
+      if (!membership.canControl) {
+        showToast(membership.noControlMessage);
         return;
       }
     } on RemoteControlApiException catch (e) {

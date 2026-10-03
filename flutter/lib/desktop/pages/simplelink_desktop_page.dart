@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/material.dart' as material;
@@ -1860,7 +1861,6 @@ class _HomeTwoColumnLayout extends StatelessWidget {
       },
     );
   }
-
 }
 
 class _LoginBanner extends StatelessWidget {
@@ -1878,7 +1878,7 @@ class _LoginBanner extends StatelessWidget {
         final expiryLabel = isPaidMember ? '会员到期时间' : '体验到期时间';
         return Container(
           height: isLoggedIn ? 62 : 44,
-              margin: const EdgeInsets.only(bottom: 16),
+          margin: const EdgeInsets.only(bottom: 16),
           padding: const EdgeInsets.symmetric(horizontal: 18),
           decoration: BoxDecoration(
             color: const Color(0xFFEAF3FF),
@@ -2077,7 +2077,6 @@ class _ClaimTrialButton extends StatelessWidget {
       );
     });
   }
-
 }
 
 class _CurrentDeviceCard extends StatelessWidget {
@@ -2442,8 +2441,8 @@ class _RecentSessionsCardState extends State<_RecentSessionsCard> {
   void initState() {
     super.initState();
     _loadAndRefreshOnlineStates();
-    _onlineRefreshTimer = Timer.periodic(
-        _onlineRefreshInterval, (_) => _refreshOnlineStates());
+    _onlineRefreshTimer =
+        Timer.periodic(_onlineRefreshInterval, (_) => _refreshOnlineStates());
   }
 
   @override
@@ -2791,79 +2790,82 @@ class _DeviceListPageState extends State<_DeviceListPage> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                      const _DeviceSectionHeader(
-                        title: '最近连接',
-                        icon: Icons.history_rounded,
-                      ),
-                      const SizedBox(height: 24),
-                      _DeviceSectionHeader(
-                        title: '我的设备（${peers.length + 1}）',
-                        icon: Icons.devices_rounded,
-                        actions: [
-                          IconButton(
-                            onPressed: () {},
-                            icon: const Icon(Icons.sort_rounded),
-                            tooltip: '排序',
+                          const _DeviceSectionHeader(
+                            title: '最近连接',
+                            icon: Icons.history_rounded,
                           ),
-                          IconButton(
-                            onPressed: () {},
-                            icon: const Icon(Icons.filter_alt_outlined),
-                            tooltip: '筛选',
+                          const SizedBox(height: 24),
+                          _DeviceSectionHeader(
+                            title: '我的设备（${peers.length + 1}）',
+                            icon: Icons.devices_rounded,
+                            actions: [
+                              IconButton(
+                                onPressed: () {},
+                                icon: const Icon(Icons.sort_rounded),
+                                tooltip: '排序',
+                              ),
+                              IconButton(
+                                onPressed: () {},
+                                icon: const Icon(Icons.filter_alt_outlined),
+                                tooltip: '筛选',
+                              ),
+                            ],
+                          ),
+                          const Divider(height: 20),
+                          Expanded(
+                            child: Scrollbar(
+                              controller: _scrollController,
+                              thumbVisibility: true,
+                              child: ListView(
+                                controller: _scrollController,
+                                padding: EdgeInsets.zero,
+                                children: [
+                                  _DeviceListRow(
+                                    name: '本机设备',
+                                    platform:
+                                        _platformLabel(kPeerPlatformWindows),
+                                    id: gFFI.id,
+                                    online: true,
+                                    isCurrent: true,
+                                  ),
+                                  ...peers.map(
+                                    (peer) => _DeviceListRow(
+                                      name: peer.alias.isNotEmpty
+                                          ? peer.alias
+                                          : (peer.hostname.isNotEmpty
+                                              ? peer.hostname
+                                              : peer.username.isNotEmpty
+                                                  ? peer.username
+                                                  : peer.id),
+                                      platform: _platformLabel(peer.platform),
+                                      id: peer.id,
+                                      online: peer.online,
+                                      onTap: () => connect(context, peer.id),
+                                    ),
+                                  ),
+                                  if (peers.isEmpty)
+                                    const Padding(
+                                      padding:
+                                          EdgeInsets.symmetric(vertical: 36),
+                                      child: Center(
+                                        child: Text(
+                                          '暂无其他设备，输入设备 ID 即可快速连接',
+                                          style: TextStyle(
+                                              color: Color(0xFF8A93A3)),
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
                           ),
                         ],
                       ),
-                      const Divider(height: 20),
-                      Expanded(
-                        child: Scrollbar(
-                          controller: _scrollController,
-                          thumbVisibility: true,
-                          child: ListView(
-                            controller: _scrollController,
-                            padding: EdgeInsets.zero,
-                            children: [
-                              _DeviceListRow(
-                                name: '本机设备',
-                                platform: _platformLabel(kPeerPlatformWindows),
-                                id: gFFI.id,
-                                online: true,
-                                isCurrent: true,
-                              ),
-                              ...peers.map(
-                                (peer) => _DeviceListRow(
-                                  name: peer.alias.isNotEmpty
-                                      ? peer.alias
-                                      : (peer.hostname.isNotEmpty
-                                          ? peer.hostname
-                                          : peer.username.isNotEmpty
-                                              ? peer.username
-                                              : peer.id),
-                                  platform: _platformLabel(peer.platform),
-                                  id: peer.id,
-                                  online: peer.online,
-                                  onTap: () => connect(context, peer.id),
-                                ),
-                              ),
-                              if (peers.isEmpty)
-                                const Padding(
-                                  padding: EdgeInsets.symmetric(vertical: 36),
-                                  child: Center(
-                                    child: Text(
-                                      '暂无其他设备，输入设备 ID 即可快速连接',
-                                      style: TextStyle(color: Color(0xFF8A93A3)),
-                                    ),
-                                  ),
-                                ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
+                    ),
                   ),
                 ),
               ),
             ),
-          ),
-        ),
           );
         },
       ),
@@ -3110,9 +3112,7 @@ class _MembershipPageState extends State<_MembershipPage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      isLoggedIn
-                          ? gFFI.userModel.displayNameOrUserName
-                          : '账户',
+                      isLoggedIn ? gFFI.userModel.displayNameOrUserName : '账户',
                       style: const TextStyle(
                         color: Color(0xFF111827),
                         fontSize: 20,
@@ -3400,8 +3400,8 @@ class _MembershipPageState extends State<_MembershipPage> {
                         child: SizedBox(
                           height: 42,
                           child: FilledButton(
-                            onPressed: () => Navigator.of(context)
-                                .pop(selectedPayType),
+                            onPressed: () =>
+                                Navigator.of(context).pop(selectedPayType),
                             child: Text(
                               '立即支付 ¥${package.price}',
                               style: const TextStyle(
@@ -3445,9 +3445,8 @@ class _MembershipPageState extends State<_MembershipPage> {
             color: selected ? const Color(0xFFF5F9FF) : Colors.white,
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
-              color: selected
-                  ? const Color(0xFF1769FF)
-                  : const Color(0xFFE3E8F0),
+              color:
+                  selected ? const Color(0xFF1769FF) : const Color(0xFFE3E8F0),
               width: selected ? 1.5 : 1,
             ),
           ),
@@ -3536,12 +3535,14 @@ class _MembershipPageState extends State<_MembershipPage> {
       RemoteControlPaymentOrder order, String qrCodeUrl) async {
     Timer? timer;
     var completed = false;
+    var dialogClosed = false;
     final isWechat = payType == 'wechat';
     final paymentName = isWechat ? '微信支付' : '支付宝支付';
     final paymentHint = isWechat ? '请打开微信扫一扫完成支付' : '请打开支付宝扫一扫完成支付';
-    final paymentAsset = isWechat
-        ? 'assets/payment_wechat.svg'
-        : 'assets/payment_alipay.svg';
+    final paymentHintNotifier = ValueNotifier(paymentHint);
+    final paymentProgressNotifier = ValueNotifier('');
+    final paymentAsset =
+        isWechat ? 'assets/payment_wechat.svg' : 'assets/payment_alipay.svg';
     final dialog = showDialog<void>(
       context: context,
       barrierDismissible: false,
@@ -3592,7 +3593,8 @@ class _MembershipPageState extends State<_MembershipPage> {
                 const SizedBox(height: 16),
                 Container(
                   width: double.infinity,
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                   decoration: BoxDecoration(
                     color: const Color(0xFFF7F9FC),
                     borderRadius: BorderRadius.circular(10),
@@ -3653,16 +3655,73 @@ class _MembershipPageState extends State<_MembershipPage> {
                           child: SvgPicture.asset(paymentAsset),
                         ),
                       ),
+                      ValueListenableBuilder<String>(
+                        valueListenable: paymentProgressNotifier,
+                        builder: (context, progress, child) {
+                          if (progress.isEmpty) {
+                            return const SizedBox.shrink();
+                          }
+                          final paymentConfirmed = progress == 'SUCCESS' ||
+                              progress == 'TRADE_SUCCESS';
+                          return Positioned.fill(
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(6),
+                              child: BackdropFilter(
+                                filter: ImageFilter.blur(sigmaX: 4, sigmaY: 4),
+                                child: Container(
+                                  color: Colors.black.withOpacity(0.45),
+                                  child: Center(
+                                    child: Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        if (paymentConfirmed)
+                                          const SizedBox(
+                                            width: 28,
+                                            height: 28,
+                                            child: CircularProgressIndicator(
+                                              color: Colors.white,
+                                              strokeWidth: 3,
+                                            ),
+                                          )
+                                        else
+                                          const Icon(
+                                            Icons.check_circle_rounded,
+                                            color: Colors.white,
+                                            size: 32,
+                                          ),
+                                        const SizedBox(height: 10),
+                                        Text(
+                                          paymentConfirmed
+                                              ? '支付成功，正在到账'
+                                              : '已扫码，请确认支付',
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
                     ],
                   ),
                 ),
                 const SizedBox(height: 14),
-                Text(
-                  paymentHint,
-                  style: const TextStyle(
-                    color: Color(0xFF475467),
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
+                ValueListenableBuilder<String>(
+                  valueListenable: paymentHintNotifier,
+                  builder: (context, hint, child) => Text(
+                    hint,
+                    style: const TextStyle(
+                      color: Color(0xFF475467),
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
                 const SizedBox(height: 5),
@@ -3682,9 +3741,13 @@ class _MembershipPageState extends State<_MembershipPage> {
       ),
     );
     timer = Timer.periodic(const Duration(seconds: 3), (_) async {
-      if (completed) return;
+      if (completed || dialogClosed) return;
       try {
-        if (await RemoteControlApi.isPaymentComplete(order.orderNo)) {
+        final paymentStatus =
+            await RemoteControlApi.paymentStatus(order.orderNo);
+        debugPrint(
+            '[REMOTE-PAYMENT-STATUS] order=${order.orderNo} complete=${paymentStatus.isComplete} provider=${paymentStatus.providerStatus}');
+        if (paymentStatus.isComplete) {
           completed = true;
           timer?.cancel();
           if (mounted) {
@@ -3693,11 +3756,24 @@ class _MembershipPageState extends State<_MembershipPage> {
                 await RemoteControlApi.membershipStatus();
             showToast('支付成功，会员权益已到账');
           }
+        } else if (!dialogClosed) {
+          final providerStatus = paymentStatus.providerStatus;
+          if (providerStatus == 'USERPAYING') {
+            paymentHintNotifier.value = '已扫码，请在微信中确认支付';
+            paymentProgressNotifier.value = providerStatus;
+          } else if (providerStatus == 'SUCCESS' ||
+              providerStatus == 'TRADE_SUCCESS') {
+            paymentHintNotifier.value = '支付成功，正在发放会员权益';
+            paymentProgressNotifier.value = providerStatus;
+          }
         }
       } catch (_) {}
     });
     await dialog;
+    dialogClosed = true;
     timer?.cancel();
+    paymentHintNotifier.dispose();
+    paymentProgressNotifier.dispose();
     if (completed) return;
     try {
       await RemoteControlApi.cancelPaymentOrder(order.orderNo);
@@ -3747,8 +3823,7 @@ class _SimpleLinkSettingsPageState extends State<_SimpleLinkSettingsPage> {
         bind.mainGetLocalOption(key: kOptionEnableCheckUpdate) != 'N';
     _savedCloseToTray =
         bind.mainGetLocalOption(key: _simpleLinkCloseToTrayOption) != 'N';
-    _savedUdpPunch =
-        bind.mainGetLocalOption(key: kOptionEnableUdpPunch) != 'N';
+    _savedUdpPunch = bind.mainGetLocalOption(key: kOptionEnableUdpPunch) != 'N';
     _savedIpv6Punch =
         bind.mainGetLocalOption(key: kOptionEnableIpv6Punch) == 'Y';
     _autoStart = _savedAutoStart;
@@ -3784,7 +3859,8 @@ class _SimpleLinkSettingsPageState extends State<_SimpleLinkSettingsPage> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('发现新版本'),
-        content: Text(version.isEmpty ? '发现可用更新。' : '发现 $version 版本，是否立即下载并安装？'),
+        content:
+            Text(version.isEmpty ? '发现可用更新。' : '发现 $version 版本，是否立即下载并安装？'),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
@@ -4062,8 +4138,7 @@ class _SimpleLinkSettingsPageState extends State<_SimpleLinkSettingsPage> {
                           label: const Text('恢复默认设置'),
                           style: OutlinedButton.styleFrom(
                             foregroundColor: const Color(0xFF334155),
-                            side:
-                                const BorderSide(color: Color(0xFFDDE5F0)),
+                            side: const BorderSide(color: Color(0xFFDDE5F0)),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(6),
                             ),
@@ -4078,8 +4153,7 @@ class _SimpleLinkSettingsPageState extends State<_SimpleLinkSettingsPage> {
                           onPressed: _cancel,
                           style: OutlinedButton.styleFrom(
                             foregroundColor: const Color(0xFF334155),
-                            side:
-                                const BorderSide(color: Color(0xFFDDE5F0)),
+                            side: const BorderSide(color: Color(0xFFDDE5F0)),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(6),
                             ),

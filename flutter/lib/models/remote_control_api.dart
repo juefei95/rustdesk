@@ -136,6 +136,16 @@ class RemoteControlPaymentOrder {
   }
 }
 
+class RemoteControlPaymentStatus {
+  const RemoteControlPaymentStatus({
+    required this.isComplete,
+    required this.providerStatus,
+  });
+
+  final bool isComplete;
+  final String providerStatus;
+}
+
 class WechatQrLoginSession {
   WechatQrLoginSession({
     required this.scene,
@@ -192,14 +202,12 @@ class RemoteControlApi {
       final idServer = (data['id_server'] ?? '').toString().trim();
       if (idServer.isEmpty) {
         await bind.mainSetLocalOption(key: _backendMarker, value: 'N');
-        await bind.mainSetOption(
-            key: 'custom-rendezvous-server', value: '');
+        await bind.mainSetOption(key: 'custom-rendezvous-server', value: '');
         return false;
       }
       await bind.mainSetLocalOption(key: _backendMarker, value: 'Y');
       await bind.mainSetOption(
-          key: 'custom-rendezvous-server',
-          value: idServer);
+          key: 'custom-rendezvous-server', value: idServer);
       await bind.mainSetOption(
           key: 'relay-server', value: (data['relay_server'] ?? '').toString());
       await bind.mainSetOption(
@@ -253,8 +261,8 @@ class RemoteControlApi {
   }
 
   static Future<WechatQrLoginSession> wechatQrLoginSession() async {
-    final response = await http.get(
-        Uri.parse('$server/addons/wechatqrcodelogin/index/loginqrcode'));
+    final response = await http
+        .get(Uri.parse('$server/addons/wechatqrcodelogin/index/loginqrcode'));
     final data = _decode(response);
     final scene = (data['scene'] ?? '').toString();
     final qrUrl = (data['qr_url'] ?? '').toString();
@@ -272,9 +280,8 @@ class RemoteControlApi {
 
   static Future<RemoteControlLoginResult?> queryWechatQrLogin(
       String scene) async {
-    final uri =
-        Uri.parse('$server/addons/wechatqrcodelogin/index/loginstatus')
-            .replace(queryParameters: {'scene': scene});
+    final uri = Uri.parse('$server/addons/wechatqrcodelogin/index/loginstatus')
+        .replace(queryParameters: {'scene': scene});
     final response = await http.get(uri);
     final data = _decode(response);
     final status = (data['status'] ?? '').toString();
@@ -321,13 +328,14 @@ class RemoteControlApi {
             '')
         .toString();
     if (token.isEmpty) {
-      throw RemoteControlApiException('WeChat login response contains no token');
+      throw RemoteControlApiException(
+          'WeChat login response contains no token');
     }
-    final fallbackName = (rawUser['mobile'] ?? rawUser['id'] ?? 'wechat')
-        .toString();
+    final fallbackName =
+        (rawUser['mobile'] ?? rawUser['id'] ?? 'wechat').toString();
     final user = <String, dynamic>{
-      'name': (rawUser['username'] ?? rawUser['name'] ?? fallbackName)
-          .toString(),
+      'name':
+          (rawUser['username'] ?? rawUser['name'] ?? fallbackName).toString(),
       'display_name':
           (rawUser['nickname'] ?? rawUser['display_name'] ?? '').toString(),
       'avatar': (rawUser['avatar'] ?? '').toString(),
@@ -339,8 +347,8 @@ class RemoteControlApi {
       user,
       member is Map<String, dynamic>
           ? RemoteControlMembership.fromJson(member)
-            : const RemoteControlMembership(
-                canControl: false,
+          : const RemoteControlMembership(
+              canControl: false,
               trialGiven: false,
               packageName: '',
               expireTime: '',
@@ -355,8 +363,8 @@ class RemoteControlApi {
     if (token.isEmpty) {
       throw RemoteControlApiException('请先登录');
     }
-    final response = await http.get(Uri.parse('$server/api/remote/status'),
-        headers: {'token': token});
+    final response = await http
+        .get(Uri.parse('$server/api/remote/status'), headers: {'token': token});
     return RemoteControlMembership.fromJson(_decode(response));
   }
 
@@ -410,12 +418,14 @@ class RemoteControlApi {
     }
     final orderNo = (order['order_no'] ?? '').toString().trim();
     if (orderNo.isEmpty) {
-      throw RemoteControlApiException('Payment response contains no order number');
+      throw RemoteControlApiException(
+          'Payment response contains no order number');
     }
     return RemoteControlPaymentOrder(orderNo: orderNo, payment: payment);
   }
 
-  static Future<bool> isPaymentComplete(String orderNo) async {
+  static Future<RemoteControlPaymentStatus> paymentStatus(
+      String orderNo) async {
     final token = bind.mainGetLocalOption(key: accessTokenKey);
     if (token.isEmpty) {
       throw RemoteControlApiException('请先登录');
@@ -427,7 +437,10 @@ class RemoteControlApi {
     if (order is! Map<String, dynamic>) {
       throw RemoteControlApiException('Invalid order status response');
     }
-    return order['status'] == 1 || order['status'] == '1';
+    return RemoteControlPaymentStatus(
+      isComplete: order['status'] == 1 || order['status'] == '1',
+      providerStatus: (order['payment_status'] ?? '').toString(),
+    );
   }
 
   static Future<void> cancelPaymentOrder(String orderNo) async {

@@ -3544,6 +3544,7 @@ class _MembershipPageState extends State<_MembershipPage> {
         : 'assets/payment_alipay.svg';
     final dialog = showDialog<void>(
       context: context,
+      barrierDismissible: false,
       builder: (dialogContext) => material.Dialog(
         insetPadding: const EdgeInsets.symmetric(horizontal: 24),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -3697,6 +3698,21 @@ class _MembershipPageState extends State<_MembershipPage> {
     });
     await dialog;
     timer?.cancel();
+    if (completed) return;
+    try {
+      await RemoteControlApi.cancelPaymentOrder(order.orderNo);
+      if (mounted) {
+        showToast('支付已取消');
+      }
+    } on RemoteControlApiException catch (error) {
+      if (mounted) {
+        showToast(error.message);
+      }
+    } catch (_) {
+      if (mounted) {
+        showToast('取消支付失败，请稍后在后台确认订单状态');
+      }
+    }
   }
 }
 

@@ -430,6 +430,22 @@ class RemoteControlApi {
     return order['status'] == 1 || order['status'] == '1';
   }
 
+  static Future<void> cancelPaymentOrder(String orderNo) async {
+    final token = bind.mainGetLocalOption(key: accessTokenKey);
+    if (token.isEmpty) {
+      throw RemoteControlApiException('请先登录');
+    }
+    final response = await http.post(
+      Uri.parse('$server/api/remote/order/cancel'),
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'token': token,
+      },
+      body: Uri(queryParameters: {'order_no': orderNo}).query,
+    );
+    _decode(response);
+  }
+
   static Future<bool> canControl() async {
     return (await membershipStatus()).canControl;
   }

@@ -3230,7 +3230,7 @@ class _MembershipPageState extends State<_MembershipPage> {
       widget.onLogin();
       return;
     }
-    var selectedPayType = 'alipay';
+    var selectedPayType = 'wechat';
     final payType = await showDialog<String>(
       context: context,
       builder: (context) => StatefulBuilder(
@@ -3348,9 +3348,7 @@ class _MembershipPageState extends State<_MembershipPage> {
                     title: '支付宝支付',
                     subtitle: '推荐使用支付宝，安全快捷',
                     assetPath: 'assets/payment_alipay.svg',
-                    onTap: () => setDialogState(() {
-                      selectedPayType = 'alipay';
-                    }),
+                    onTap: () => showToast('暂不支持支付宝，敬请等待'),
                   ),
                   const SizedBox(height: 10),
                   _buildPaymentMethod(
@@ -3538,30 +3536,148 @@ class _MembershipPageState extends State<_MembershipPage> {
       RemoteControlPaymentOrder order, String qrCodeUrl) async {
     Timer? timer;
     var completed = false;
+    final isWechat = payType == 'wechat';
+    final paymentName = isWechat ? '微信支付' : '支付宝支付';
+    final paymentHint = isWechat ? '请打开微信扫一扫完成支付' : '请打开支付宝扫一扫完成支付';
+    final paymentAsset = isWechat
+        ? 'assets/payment_wechat.svg'
+        : 'assets/payment_alipay.svg';
     final dialog = showDialog<void>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: Text(payType == 'wechat' ? '微信扫码支付' : '支付宝扫码支付'),
-        content: SizedBox(
-          width: 260,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text('${package.name}  ¥${package.price}'),
-              const SizedBox(height: 16),
-              QrImageView(data: qrCodeUrl, size: 220),
-              const SizedBox(height: 14),
-              const Text('请使用对应 App 扫码完成支付',
-                  style: TextStyle(color: Color(0xFF667085))),
-            ],
+      builder: (dialogContext) => material.Dialog(
+        insetPadding: const EdgeInsets.symmetric(horizontal: 24),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        child: SizedBox(
+          width: 336,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(26, 22, 18, 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  children: [
+                    SizedBox(
+                      width: 30,
+                      height: 30,
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: SvgPicture.asset(paymentAsset),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Text(
+                      '$paymentName扫码支付',
+                      style: const TextStyle(
+                        color: Color(0xFF17203A),
+                        fontSize: 17,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const Spacer(),
+                    IconButton(
+                      tooltip: '取消支付',
+                      onPressed: () => Navigator.of(dialogContext).pop(),
+                      icon: const Icon(Icons.close_rounded),
+                      color: const Color(0xFF98A2B3),
+                      iconSize: 20,
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints.tightFor(
+                        width: 30,
+                        height: 30,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF7F9FC),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          package.name,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Color(0xFF344054),
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Text(
+                        '¥${package.price}',
+                        style: const TextStyle(
+                          color: Color(0xFFFF5A1F),
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 18),
+                Container(
+                  width: 216,
+                  height: 216,
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: const Color(0xFFE7ECF3)),
+                  ),
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      QrImageView(
+                        data: qrCodeUrl,
+                        size: 198,
+                        errorCorrectionLevel: QrErrorCorrectLevel.H,
+                      ),
+                      Container(
+                        width: 42,
+                        height: 42,
+                        padding: const EdgeInsets.all(3),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(5),
+                          child: SvgPicture.asset(paymentAsset),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 14),
+                Text(
+                  paymentHint,
+                  style: const TextStyle(
+                    color: Color(0xFF475467),
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 5),
+                const Text(
+                  '支付成功后会员权益将自动到账',
+                  style: TextStyle(color: Color(0xFF98A2B3), fontSize: 12),
+                ),
+                const SizedBox(height: 8),
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(),
+                  child: const Text('取消支付'),
+                ),
+              ],
+            ),
           ),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(),
-            child: const Text('取消'),
-          ),
-        ],
       ),
     );
     timer = Timer.periodic(const Duration(seconds: 3), (_) async {

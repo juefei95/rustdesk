@@ -315,6 +315,7 @@ impl Client {
                 tokio::spawn(func);
                 (Some(socket), Some(udp_port))
             } else {
+                log::warn!("UDP 打洞初始化失败：无法创建到 rendezvous 服务器 {} 的 UDP 套接字，将继续尝试 TCP 打洞", rendezvous_server);
                 (None, None)
             }
         } else {
@@ -477,22 +478,30 @@ impl Client {
                     Some(rendezvous_message::Union::PunchHoleResponse(ph)) => {
                         if ph.socket_addr.is_empty() {
                             if !ph.other_failure.is_empty() {
+                                log::warn!("{} 打洞被 rendezvous 服务器拒绝，对端 {} 的失败原因：{}", punch_type, peer, ph.other_failure);
                                 bail!(ph.other_failure);
                             }
                             match ph.failure.enum_value() {
                                 Ok(punch_hole_response::Failure::ID_NOT_EXIST) => {
+                                    log::warn!("{} 打洞失败：对端 {} 的 ID 不存在", punch_type, peer);
                                     bail!("ID does not exist");
                                 }
                                 Ok(punch_hole_response::Failure::OFFLINE) => {
+                                    log::warn!("{} 打洞失败：对端 {} 不在线", punch_type, peer);
                                     bail!("Remote desktop is offline");
                                 }
                                 Ok(punch_hole_response::Failure::LICENSE_MISMATCH) => {
+                                    log::warn!("{} 打洞失败：对端 {} 的密钥不匹配", punch_type, peer);
                                     bail!("Key mismatch");
                                 }
                                 Ok(punch_hole_response::Failure::LICENSE_OVERUSE) => {
+                                    log::warn!("{} 打洞失败：对端 {} 的授权已超限", punch_type, peer);
                                     bail!("Key overuse");
                                 }
-                                _ => bail!("other punch hole failure"),
+                                _ => {
+                                    log::warn!("{} 打洞失败：rendezvous 服务器返回未知错误 {:?}", punch_type, ph.failure);
+                                    bail!("other punch hole failure");
+                                }
                             }
                         } else {
                             peer_nat_type = ph.nat_type();
@@ -580,6 +589,7 @@ impl Client {
         }
         drop(socket);
         if peer_addr.port() == 0 {
+            log::warn!("{} 打洞失败：在 3 次请求内未从 rendezvous 服务器获得对端 {} 的可用地址", punch_type, peer);
             bail!("Failed to connect via rendezvous server");
         }
         let time_used = start.elapsed().as_millis() as u64;
@@ -685,8 +695,13 @@ impl Client {
         let fut = connect_tcp_local(peer, Some(local_addr), connect_timeout);
         connect_futures.push(
             async move {
-                let conn = fut.await?;
-                Ok((conn, None, "TCP"))
+                match fut.await {
+                    Ok(conn) => Ok((conn, None, "TCP")),
+                    Err(err) => {
+                        log::warn!("TCP 打洞/直连失败，对端 {}，超时 {} ms：{}", peer, connect_timeout, err);
+                        Err(err)
+                    }
+                }
             }
             .boxed(),
         );
@@ -705,6 +720,11 @@ impl Client {
         let mut direct = !conn.is_err();
         if interface.is_force_relay() || conn.is_err() {
             if !relay_server.is_empty() {
+                if interface.is_force_relay() {
+                    log::info!("已配置强制中继，跳过 {} 打洞后的直连，改用 TCP 中继服务器 {}", punch_type, relay_server);
+                } else if let Err(err) = &conn {
+                    log::warn!("{} 打洞后的所有直连尝试均失败：{}；改用 TCP 中继服务器 {}", punch_type, err, relay_server);
+                }
                 let switch_code = interface.get_switch_code();
                 conn = Self::request_relay(
                     peer_id,
@@ -725,6 +745,9 @@ impl Client {
                 typ = "Relay";
                 direct = false;
             } else {
+                if let Err(err) = &conn {
+                    log::warn!("{} 打洞后的所有直连尝试均失败：{}，且未提供中继服务器", punch_type, err);
+                }
                 bail!("Failed to make direct connection to remote desktop");
             }
         }
@@ -4366,13 +4389,13 @@ async fn udp_nat_connect(
     crate::punch_udp(socket.clone(), false)
         .await
         .map_err(|err| {
-            log::debug!("{err}");
+            log::warn!("{} 打洞失败：{}", typ, err);
             anyhow!(err)
         })?;
     let res = KcpStream::connect(socket, Duration::from_millis(ms_timeout))
         .await
         .map_err(|err| {
-            log::debug!("Failed to connect KCP stream: {}", err);
+            log::warn!("{} 打洞成功但 KCP 连接建立失败：{}", typ, err);
             anyhow!(err)
         })?;
     Ok((res.1, Some(res.0), typ))

@@ -663,11 +663,19 @@ impl RendezvousMediator {
         }
         let relay_server = self.get_relay_server(ph.relay_server);
         // for ensure, websocket go relay directly
-        if ph.nat_type.enum_value() == Ok(NatType::SYMMETRIC)
-            || Config::get_nat_type() == NatType::SYMMETRIC as i32
-            || relay
-            || (config::is_disable_tcp_listen() && ph.udp_port <= 0)
-        {
+        let relay_reason = if ph.nat_type.enum_value() == Ok(NatType::SYMMETRIC) {
+            Some("发起端为对称 NAT")
+        } else if Config::get_nat_type() == NatType::SYMMETRIC as i32 {
+            Some("本端为对称 NAT")
+        } else if relay {
+            Some("已启用 WebSocket、代理或强制中继")
+        } else if config::is_disable_tcp_listen() && ph.udp_port <= 0 {
+            Some("本端禁用了 TCP 监听且发起端未提供 UDP 端口")
+        } else {
+            None
+        };
+        if let Some(reason) = relay_reason {
+            log::info!("跳过与 {} 的直接打洞，原因：{}；改用 TCP 中继服务器 {}", peer_addr, reason, relay_server);
             let uuid = Uuid::new_v4().to_string();
             return self
                 .create_relay(
@@ -705,7 +713,9 @@ impl RendezvousMediator {
             let local_addr = socket.local_addr();
             // key important here for punch hole to tell my gateway incoming peer is safe.
             // it can not be async here, because local_addr can not be reused, we must close the connection before use it again.
-            allow_err!(socket_client::connect_tcp_local(peer_addr, Some(local_addr), 30).await);
+            if let Err(err) = socket_client::connect_tcp_local(peer_addr, Some(local_addr), 30).await {
+                log::warn!("TCP 打洞探测失败，对端 {:?}，本地地址 {:?}：{}", peer_addr, local_addr, err);
+            }
             socket
         };
         let mut msg_out = Message::new();

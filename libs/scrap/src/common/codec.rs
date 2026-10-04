@@ -499,7 +499,7 @@ impl Decoder {
     }
 
     pub fn new(format: CodecFormat, _luid: Option<i64>) -> Decoder {
-        log::info!("try create new decoder, format: {format:?}, _luid: {_luid:?}");
+        log::info!("尝试创建新解码器，格式：{format:?}，LUID：{_luid:?}");
         let (mut vp8, mut vp9, mut av1) = (None, None, None);
         #[cfg(feature = "hwcodec")]
         let (mut h264_ram, mut h265_ram) = (None, None);
@@ -515,7 +515,7 @@ impl Decoder {
                     codec: VpxVideoCodecId::VP8,
                 }) {
                     Ok(v) => vp8 = Some(v),
-                    Err(e) => log::error!("create VP8 decoder failed: {}", e),
+                    Err(e) => log::error!("创建 VP8 解码器失败：{}", e),
                 }
                 valid = vp8.is_some();
             }
@@ -524,14 +524,14 @@ impl Decoder {
                     codec: VpxVideoCodecId::VP9,
                 }) {
                     Ok(v) => vp9 = Some(v),
-                    Err(e) => log::error!("create VP9 decoder failed: {}", e),
+                    Err(e) => log::error!("创建 VP9 解码器失败：{}", e),
                 }
                 valid = vp9.is_some();
             }
             CodecFormat::AV1 => {
                 match AomDecoder::new() {
                     Ok(v) => av1 = Some(v),
-                    Err(e) => log::error!("create AV1 decoder failed: {}", e),
+                    Err(e) => log::error!("创建 AV1 解码器失败：{}", e),
                 }
                 valid = av1.is_some();
             }
@@ -540,7 +540,7 @@ impl Decoder {
                 if !valid && enable_vram_option(false) && _luid.clone().unwrap_or_default() != 0 {
                     match VRamDecoder::new(format, _luid) {
                         Ok(v) => h264_vram = Some(v),
-                        Err(e) => log::error!("create H264 vram decoder failed: {}", e),
+                        Err(e) => log::error!("创建 H264 显存解码器失败：{}", e),
                     }
                     valid = h264_vram.is_some();
                 }
@@ -548,7 +548,7 @@ impl Decoder {
                 if !valid {
                     match HwRamDecoder::new(format) {
                         Ok(v) => h264_ram = Some(v),
-                        Err(e) => log::error!("create H264 ram decoder failed: {}", e),
+                        Err(e) => log::error!("创建 H264 内存解码器失败：{}", e),
                     }
                     valid = h264_ram.is_some();
                 }
@@ -556,7 +556,7 @@ impl Decoder {
                 if !valid && enable_hwcodec_option() {
                     h264_media_codec = MediaCodecDecoder::new(format);
                     if h264_media_codec.is_none() {
-                        log::error!("create H264 media codec decoder failed");
+                        log::error!("创建 H264 MediaCodec 解码器失败");
                     }
                     valid = h264_media_codec.is_some();
                 }
@@ -566,7 +566,7 @@ impl Decoder {
                 if !valid && enable_vram_option(false) && _luid.clone().unwrap_or_default() != 0 {
                     match VRamDecoder::new(format, _luid) {
                         Ok(v) => h265_vram = Some(v),
-                        Err(e) => log::error!("create H265 vram decoder failed: {}", e),
+                        Err(e) => log::error!("创建 H265 显存解码器失败：{}", e),
                     }
                     valid = h265_vram.is_some();
                 }
@@ -574,7 +574,7 @@ impl Decoder {
                 if !valid {
                     match HwRamDecoder::new(format) {
                         Ok(v) => h265_ram = Some(v),
-                        Err(e) => log::error!("create H265 ram decoder failed: {}", e),
+                        Err(e) => log::error!("创建 H265 内存解码器失败：{}", e),
                     }
                     valid = h265_ram.is_some();
                 }
@@ -582,19 +582,19 @@ impl Decoder {
                 if !valid && enable_hwcodec_option() {
                     h265_media_codec = MediaCodecDecoder::new(format);
                     if h265_media_codec.is_none() {
-                        log::error!("create H265 media codec decoder failed");
+                        log::error!("创建 H265 MediaCodec 解码器失败");
                     }
                     valid = h265_media_codec.is_some();
                 }
             }
             CodecFormat::Unknown => {
-                log::error!("unknown codec format, cannot create decoder");
+                log::error!("未知编解码格式，无法创建解码器");
             }
         }
         if !valid {
-            log::error!("failed to create {format:?} decoder");
+            log::error!("创建 {format:?} 解码器失败");
         } else {
-            log::info!("create {format:?} decoder success");
+            log::info!("{format:?} 解码器创建成功");
         }
         Decoder {
             vp8,
@@ -981,7 +981,7 @@ pub fn codec_thread_num(limit: usize) -> usize {
     {
         res = 0;
         let percent = hbb_common::platform::windows::cpu_uage_one_minute();
-        info = format!("cpu usage: {:?}", percent);
+        info = format!("CPU 使用率：{:?}", percent);
         if let Some(pecent) = percent {
             if pecent < 100.0 {
                 res = ((100.0 - pecent) * (max as f64) / 200.0).round() as usize;
@@ -1024,7 +1024,7 @@ pub fn codec_thread_num(limit: usize) -> usize {
         None => true,
     };
     if log {
-        log::info!("cpu num: {max}, {info}, available memory: {memory}G, codec thread: {res}");
+        log::info!("CPU 数量：{max}，{info}，可用内存：{memory}G，编解码线程数：{res}");
         *THREAD_LOG_TIME.lock().unwrap() = Some(Instant::now());
     }
     res

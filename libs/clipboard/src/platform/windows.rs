@@ -645,10 +645,10 @@ pub fn server_clip_file(
             // unreachable
         }
         ClipboardFile::MonitorReady => {
-            log::debug!("server_monitor_ready called");
+            log::debug!("开始处理服务端剪贴板监视器就绪消息");
             ret = server_monitor_ready(context, conn_id);
             log::debug!(
-                "server_monitor_ready called, conn_id {}, return {}",
+                "服务端剪贴板监视器就绪消息处理完成，连接 ID：{}，返回值：{}",
                 conn_id,
                 ret
             );

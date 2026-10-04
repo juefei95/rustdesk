@@ -38,19 +38,19 @@ impl ContextSend {
             }
             match crate::create_cliprdr_context(true, false, CLIPBOARD_RESPONSE_WAIT_TIMEOUT_SECS) {
                 Ok(context) => {
-                    log::info!("clipboard context for file transfer created.");
+                    log::info!("用于文件传输的剪贴板上下文已创建");
                     *lock = Some(context)
                 }
                 Err(err) => {
                     log::error!(
-                        "create clipboard context for file transfer: {}",
+                        "创建用于文件传输的剪贴板上下文失败：{}",
                         err.to_string()
                     );
                 }
             }
         } else if let Some(_clp) = lock.take() {
             *lock = None;
-            log::info!("clipboard context for file transfer destroyed.");
+            log::info!("用于文件传输的剪贴板上下文已销毁");
         }
     }
 
@@ -63,7 +63,7 @@ impl ContextSend {
 
         let ctx = crate::create_cliprdr_context(true, false, CLIPBOARD_RESPONSE_WAIT_TIMEOUT_SECS)?;
         *lock = Some(ctx);
-        log::info!("clipboard context for file transfer recreated.");
+        log::info!("用于文件传输的剪贴板上下文已重新创建");
         Ok(())
     }
 

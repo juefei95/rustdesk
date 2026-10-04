@@ -1783,7 +1783,7 @@ impl<T: InvokeUiSession> Interface for Session<T> {
     }
 
     fn handle_peer_info(&self, mut pi: PeerInfo) {
-        log::debug!("handle_peer_info :{:?}", pi);
+        log::debug!("处理对端信息：{:?}", pi);
         self.lc.write().unwrap().peer_info = Some(pi.clone());
         if pi.current_display as usize >= pi.displays.len() {
             pi.current_display = 0;

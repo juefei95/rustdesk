@@ -383,9 +383,9 @@ impl Client {
         let mut socket = connect_tcp(&*rendezvous_server, CONNECT_TIMEOUT).await;
         debug_assert!(!servers.contains(&rendezvous_server));
         let rtt = start.elapsed();
-        log::debug!("TCP connection establishment time used: {:?}", rtt);
+        log::debug!("TCP 连接建立耗时：{:?}", rtt);
         if socket.is_err() && !servers.is_empty() {
-            log::info!("try the other servers: {:?}", servers);
+            log::info!("正在尝试其他协调服务器：{:?}", servers);
             for server in servers {
                 let server = check_port(server, RENDEZVOUS_PORT);
                 socket = connect_tcp(&*server, CONNECT_TIMEOUT).await;
@@ -398,7 +398,7 @@ impl Client {
         } else if !contained {
             crate::refresh_rendezvous_server();
         }
-        log::info!("rendezvous server: {}", rendezvous_server);
+        log::info!("协调服务器：{}", rendezvous_server);
         let mut socket = socket?;
         let my_addr = socket.local_addr();
         let mut signed_id_pk = Vec::new();
@@ -469,7 +469,7 @@ impl Client {
         });
         for i in 1..=3 {
             log::info!(
-                "#{} {} punch attempt with {}, id: {}",
+                "第 {} 次 {} 打洞尝试，本机地址：{}，目标设备 ID：{}",
                 i,
                 punch_type,
                 my_addr,
@@ -533,13 +533,13 @@ impl Client {
                                     }
                                 }
                             }
-                            log::info!("{} Hole Punched {} = {}", punch_type, peer, peer_addr);
+                            log::info!("{} 打洞成功：目标设备 {}，对端地址 {}", punch_type, peer, peer_addr);
                             break;
                         }
                     }
                     Some(rendezvous_message::Union::RelayResponse(rr)) => {
                         log::info!(
-                            "relay requested from peer, time used: {:?}, relay_server: {}",
+                            "对端请求中继，耗时：{:?}，中继服务器：{}",
                             start.elapsed(),
                             rr.relay_server
                         );
@@ -578,7 +578,7 @@ impl Client {
                         };
                         let mut conn = conn?;
                         feedback = rr.feedback;
-                        log::info!("{:?} used to establish {typ} connection", start.elapsed());
+                        log::info!("建立 {typ} 连接耗时：{:?}", start.elapsed());
                         let pk =
                             Self::secure_connection(&peer, signed_id_pk, &key, &mut conn).await?;
                         return Ok((
@@ -588,7 +588,7 @@ impl Client {
                         ));
                     }
                     _ => {
-                        log::error!("Unexpected protobuf msg received: {:?}", msg_in);
+                        log::error!("收到意外的 Protobuf 消息：{:?}", msg_in);
                     }
                 }
             }
@@ -600,14 +600,14 @@ impl Client {
         }
         let time_used = start.elapsed().as_millis() as u64;
         log::info!(
-            "{} ms used to {} punch hole, relay_server: {}, {}",
+            "{} 毫秒完成 {} 打洞，备用中继服务器：{}，{}",
             time_used,
             punch_type,
             relay_server,
             if is_local {
-                "is_local: true".to_owned()
+                "是否局域网：true".to_owned()
             } else {
-                format!("nat_type: {:?}", peer_nat_type)
+                format!("对端 NAT 类型：{:?}", peer_nat_type)
             }
         );
         Ok((
@@ -694,7 +694,7 @@ impl Client {
                 connect_timeout = MIN;
             }
         }
-        log::info!("peer address: {}, timeout: {}", peer, connect_timeout);
+        log::info!("对端地址：{}，连接超时：{} 毫秒", peer, connect_timeout);
         let start = std::time::Instant::now();
 
         let mut connect_futures = Vec::new();
@@ -759,9 +759,9 @@ impl Client {
         }
         let mut conn = conn?;
         log::info!(
-            "{:?} used to establish {typ} connection with {} punch",
-            start.elapsed(),
-            punch_type
+            "通过 {} 打洞建立 {typ} 连接耗时：{:?}",
+            punch_type,
+            start.elapsed()
         );
         let res = Self::secure_connection(peer_id, signed_id_pk, key, &mut conn).await;
         let pk: Option<Vec<u8>> = match res {
@@ -772,7 +772,7 @@ impl Client {
                 bail!(e);
             }
         };
-        log::debug!("{} punch secure_connection ok", punch_type);
+        log::debug!("{} 打洞的加密连接建立成功", punch_type);
         Ok((conn, direct, pk, kcp, typ))
     }
 
@@ -972,7 +972,7 @@ impl Client {
             crate::clipboard::ClipboardSide::Client,
             0,
         ) {
-            log::error!("Failed to empty client clipboard files: {}", e);
+            log::error!("清空客户端剪贴板文件失败：{}", e);
         }
         #[cfg(all(feature = "unix-file-copy-paste", target_os = "linux"))]
         clipboard::platform::unix::fuse::uninit_fuse_context(true);
@@ -996,14 +996,14 @@ impl Client {
         if let Err(e) =
             clipboard_listener::subscribe(Self::CLIENT_CLIPBOARD_NAME.to_owned(), tx_cb_result)
         {
-            log::error!("Failed to subscribe clipboard listener: {}", e);
+            log::error!("订阅剪贴板监听器失败：{}", e);
             return None;
         }
 
         clipboard_lock.running = true;
         let (tx_started, rx_started) = unbounded_channel();
 
-        log::info!("Start client clipboard loop");
+        log::info!("启动客户端剪贴板循环");
         std::thread::spawn(move || {
             let mut handler = ClientClipboardHandler {
                 ctx: None,
@@ -1021,21 +1021,21 @@ impl Client {
                         handler.check_clipboard();
                     }
                     Ok(CallbackResult::Stop) => {
-                        log::debug!("Clipboard listener stopped");
+                        log::debug!("剪贴板监听器已停止");
                         break;
                     }
                     Ok(CallbackResult::StopWithError(err)) => {
-                        log::error!("Clipboard listener stopped with error: {}", err);
+                        log::error!("剪贴板监听器因错误停止：{}", err);
                         break;
                     }
                     Err(RecvTimeoutError::Timeout) => {}
                     Err(RecvTimeoutError::Disconnected) => {
-                        log::error!("Clipboard listener disconnected");
+                        log::error!("剪贴板监听器连接已断开");
                         break;
                     }
                 }
             }
-            log::info!("Stop client clipboard loop");
+            log::info!("客户端剪贴板循环已停止");
             CLIPBOARD_STATE.lock().unwrap().running = false;
         });
 
@@ -1050,7 +1050,7 @@ impl Client {
         }
         clipboard_lock.running = true;
 
-        log::info!("Start client clipboard loop");
+        log::info!("启动客户端剪贴板循环");
         std::thread::spawn(move || {
             loop {
                 if !CLIPBOARD_STATE.lock().unwrap().running {
@@ -1067,7 +1067,7 @@ impl Client {
 
                 std::thread::sleep(Duration::from_millis(CLIPBOARD_INTERVAL));
             }
-            log::info!("Stop client clipboard loop");
+            log::info!("客户端剪贴板循环已停止");
             CLIPBOARD_STATE.lock().unwrap().running = false;
         });
 
@@ -1372,13 +1372,13 @@ impl AudioHandler {
             .default_output_device()
             .with_context(|| "Failed to get default output device")?;
         log::info!(
-            "Using default output device: \"{}\"",
+            "使用默认音频输出设备：\"{}\"",
             device.name().unwrap_or("".to_owned())
         );
         let config = device.default_output_config().map_err(|e| anyhow!(e))?;
         let sample_format = config.sample_format();
-        log::info!("Default output format: {:?}", config);
-        log::info!("Remote input format: {:?}", format0);
+        log::info!("默认音频输出格式：{:?}", config);
+        log::info!("远端音频输入格式：{:?}", format0);
         #[allow(unused_mut)]
         let mut config: StreamConfig = config.into();
         #[cfg(not(target_os = "ios"))]
@@ -1604,7 +1604,7 @@ impl VideoHandler {
     /// Create a new video handler.
     pub fn new(format: CodecFormat, _display: usize) -> Self {
         let luid = Self::get_adapter_luid();
-        log::info!("new video handler for display #{_display}, format: {format:?}, luid: {luid:?}");
+        log::info!("为显示器 #{_display} 创建视频处理器，格式：{format:?}，LUID：{luid:?}");
         let rgba_format =
             if cfg!(feature = "flutter") && (cfg!(windows) || cfg!(target_os = "linux")) {
                 ImageFormat::ABGR
@@ -2659,7 +2659,7 @@ impl LoginConfigHandler {
         // no matter if change, for update file time
         self.save_config(config);
         self.supported_encoding = pi.encoding.clone().unwrap_or_default();
-        log::info!("peer info supported_encoding:{:?}", self.supported_encoding);
+        log::info!("对端支持的编码：{:?}", self.supported_encoding);
     }
 
     pub fn get_remote_dir(&self) -> String {
@@ -3040,7 +3040,7 @@ pub fn start_video_thread<F, T>(
                 break;
             }
         }
-        log::info!("Video decoder loop exits");
+        log::info!("视频解码循环退出");
     });
 }
 
@@ -3057,7 +3057,7 @@ pub fn start_audio_thread() -> MediaSender {
                         audio_handler.handle_frame(*af);
                     }
                     MediaData::AudioFormat(f) => {
-                        log::debug!("recved audio format, sample rate={}", f.sample_rate);
+                        log::debug!("收到音频格式，采样率={}", f.sample_rate);
                         audio_handler.handle_format(f);
                     }
                     _ => {}
@@ -3066,7 +3066,7 @@ pub fn start_audio_thread() -> MediaSender {
                 break;
             }
         }
-        log::info!("Audio decoder loop exits");
+        log::info!("音频解码循环退出");
     });
     audio_sender
 }
@@ -3154,7 +3154,7 @@ async fn do_sync_cpu_usage() {
         }
         _ => {}
     }
-    log::info!("{:?} used to sync cpu usage", start.elapsed());
+    log::info!("同步 CPU 使用率耗时：{:?}", start.elapsed());
 }
 
 /// Handle latency test.
@@ -4312,7 +4312,7 @@ async fn test_udp_uat(
     let data = msg_out.write_to_bytes()?;
     for _ in 0..2 {
         if let Err(e) = udp_socket.send_to(&data, server_addr).await {
-            log::warn!("Failed to send initial UDP NAT test packet: {}", e);
+            log::warn!("发送初始 UDP NAT 测试数据包失败：{}", e);
         } else {
             packets_sent += 1;
         }
@@ -4324,11 +4324,11 @@ async fn test_udp_uat(
         tokio::select! {
             Ok((addr, server)) = &mut rx => {
                 *udp_port.lock().unwrap() = addr.port();
-                log::debug!("UDP NAT test received response from {}: {}", addr, server);
+                log::debug!("UDP NAT 测试收到来自 {} 的响应：{}", addr, server);
                 break;
             }
             _ = &mut stop_udp_rx => {
-                log::debug!("UDP NAT test received stop signal after {} packets", packets_sent);
+                log::debug!("UDP NAT 测试发送 {} 个数据包后收到停止信号", packets_sent);
                 break;
             }
             _ = hbb_common::sleep(retry_interval.as_secs_f32()) => {
@@ -4338,7 +4338,7 @@ async fn test_udp_uat(
                 if elapsed >= retry_interval {
                     // Send single packet (not double) to reduce network load
                     if let Err(e) = udp_socket.send_to(&data, server_addr).await {
-                        log::warn!("Failed to send UDP NAT test retry packet: {}", e);
+                        log::warn!("发送 UDP NAT 测试重试数据包失败：{}", e);
                     } else {
                         packets_sent += 1;
                     }
@@ -4362,12 +4362,12 @@ async fn test_udp_uat(
                                 }
                             }
                             Err(e) => {
-                                log::warn!("Failed to parse UDP NAT test response: {}", e);
+                                log::warn!("解析 UDP NAT 测试响应失败：{}", e);
                             }
                         }
                     }
                     Err(e) => {
-                        log::warn!("UDP NAT test socket error: {}", e);
+                        log::warn!("UDP NAT 测试套接字错误：{}", e);
                     }
                 }
             }
@@ -4376,7 +4376,7 @@ async fn test_udp_uat(
 
     let final_port = *udp_port.lock().unwrap();
     log::debug!(
-        "UDP NAT test to {:?} finished: time={:?}, port={}, packets_sent={}, success={}",
+        "UDP NAT 测试结束，目标：{:?}，耗时：{:?}，公网端口：{}，已发送数据包：{}，成功：{}",
         server_addr,
         start.elapsed(),
         final_port,

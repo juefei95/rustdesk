@@ -217,7 +217,7 @@ impl<T: InvokeUiSession> Remote<T> {
                     if self.handler.is_default() {
                         (self.client_conn_id, rx_clip_client_holder.0) =
                             clipboard::get_rx_cliprdr_client(&self.handler.get_id());
-                        log::debug!("get cliprdr client for conn_id {}", self.client_conn_id);
+                        log::debug!("获取剪贴板重定向客户端，连接 ID：{}", self.client_conn_id);
                         let client_conn_id = self.client_conn_id;
                         rx_clip_client_holder.1 = Some(crate::SimpleCallOnReturn {
                             b: true,
@@ -341,7 +341,7 @@ impl<T: InvokeUiSession> Remote<T> {
                         }
                     }
                 }
-                log::debug!("Exit io_loop of id={}", self.handler.get_id());
+                log::debug!("连接 ID={} 的 I/O 循环退出", self.handler.get_id());
                 // Stop client audio server.
                 if let Some(s) = self.stop_voice_call_sender.take() {
                     s.send(()).ok();
@@ -1098,7 +1098,7 @@ impl<T: InvokeUiSession> Remote<T> {
             let json_str = serde_json::to_string(&job.gen_meta()).unwrap_or_default();
             transfer_metas.write_jobs.push(json_str);
         }
-        log::info!("meta: {:?}", transfer_metas);
+        log::info!("传输元数据：{:?}", transfer_metas);
         if config.transfer != transfer_metas {
             config.transfer = transfer_metas;
             self.handler.save_config(config);
@@ -2320,7 +2320,7 @@ impl<T: InvokeUiSession> Remote<T> {
         clip: hbb_common::message_proto::Cliprdr,
         _peer: &mut Stream,
     ) {
-        log::debug!("handling cliprdr msg from server peer");
+        log::debug!("正在处理来自服务端对端的剪贴板重定向消息");
         #[cfg(feature = "flutter")]
         if let Some(hbb_common::message_proto::cliprdr::Union::FormatList(_)) = &clip.union {
             if self.client_conn_id
@@ -2331,7 +2331,7 @@ impl<T: InvokeUiSession> Remote<T> {
         }
 
         let Some(clip) = crate::clipboard_file::msg_2_clip(clip) else {
-            log::warn!("failed to decode cliprdr msg from server peer");
+            log::warn!("无法解码来自服务端对端的剪贴板重定向消息");
             return;
         };
 
@@ -2339,7 +2339,7 @@ impl<T: InvokeUiSession> Remote<T> {
         let file_transfer_enabled = self.handler.is_file_clipboard_required();
         let stop = is_stopping_allowed && !file_transfer_enabled;
         log::debug!(
-                "Process clipboard message from server peer, stop: {}, is_stopping_allowed: {}, file_transfer_enabled: {}",
+                "处理来自服务端对端的剪贴板消息，停止：{}，允许停止：{}，文件传输已启用：{}",
                 stop, is_stopping_allowed, file_transfer_enabled);
         if !stop {
             #[cfg(any(
@@ -2347,7 +2347,7 @@ impl<T: InvokeUiSession> Remote<T> {
                 all(target_os = "macos", feature = "unix-file-copy-paste")
             ))]
             if let Err(e) = ContextSend::make_sure_enabled() {
-                log::error!("failed to restart clipboard context: {}", e);
+                log::error!("重新启动剪贴板上下文失败：{}", e);
             };
             #[cfg(target_os = "windows")]
             {

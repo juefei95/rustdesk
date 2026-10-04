@@ -1380,7 +1380,7 @@ pub fn session_start_(
         if !is_connected && is_first_ui_session {
             log::info!("用户发起远程连接，目标设备 ID: {}", id);
             log::info!(
-                "Session {} start, use texture render: {}",
+                "会话 {} 启动，使用纹理渲染：{}",
                 id,
                 session.use_texture_render.load(Ordering::Relaxed)
             );

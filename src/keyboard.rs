@@ -127,7 +127,7 @@ pub mod client {
         }
         drop(gs);
         if disable_first {
-            log::debug!("[grab] handoff: disable_grab before re-grab");
+            log::debug!("[键鼠捕获] 所有权移交：重新捕获前先禁用捕获");
             rdev::disable_grab();
         }
         rdev::enable_grab();
@@ -183,14 +183,14 @@ pub mod client {
                     // timer with an up-to-date snapshot of last_grab.
                     gs.deferred_pending = false;
                     log::debug!(
-                        "[grab] Run(0x{:x}): already owner, refresh debounce",
+                        "[键鼠捕获] 运行(0x{:x})：已是所有者，刷新防抖计时",
                         session_id
                     );
                     return;
                 }
 
                 log::debug!(
-                    "[grab] Run(0x{:x}): prev_owner={}, mode={}",
+                    "[键鼠捕获] 运行(0x{:x})：上一个所有者={}，模式={}",
                     session_id,
                     gs.owner
                         .map_or("none".to_string(), |id| format!("0x{:x}", id)),
@@ -218,7 +218,7 @@ pub mod client {
                 // session A from releasing session B's freshly acquired grab.
                 if gs.owner != Some(session_id) {
                     log::debug!(
-                        "[grab] Wait(0x{:x}): ignored, owner={}",
+                        "[键鼠捕获] 等待(0x{:x})：已忽略，当前所有者={}",
                         session_id,
                         gs.owner
                             .map_or("none".to_string(), |id| format!("0x{:x}", id)),
@@ -238,7 +238,7 @@ pub mod client {
                     if elapsed < GRAB_DEBOUNCE_MS {
                         if !gs.deferred_pending {
                             log::debug!(
-                                "[grab] Wait(0x{:x}): debounced ({}ms < {}ms), scheduling deferred release",
+                                "[键鼠捕获] 等待(0x{:x})：已防抖（{} 毫秒 < {} 毫秒），安排延迟释放",
                                 session_id, elapsed, GRAB_DEBOUNCE_MS,
                             );
                             gs.deferred_pending = true;
@@ -254,7 +254,7 @@ pub mod client {
                                         let to_release = take_remote_keys();
                                         gs.deferred_pending = false;
                                         log::debug!(
-                                            "[grab] Wait(0x{:x}): deferred release",
+                                            "[键鼠捕获] 等待(0x{:x})：执行延迟释放",
                                             session_id
                                         );
                                         KEYBOARD_HOOKED.store(false, Ordering::SeqCst);
@@ -263,7 +263,7 @@ pub mod client {
                                         Some(to_release)
                                     } else {
                                         log::debug!(
-                                            "[grab] Wait(0x{:x}): deferred release cancelled (grab refreshed)",
+                                            "[键鼠捕获] 等待(0x{:x})：已取消延迟释放（捕获状态已刷新）",
                                             session_id,
                                         );
                                         None
@@ -276,7 +276,7 @@ pub mod client {
                             });
                         } else {
                             log::debug!(
-                                "[grab] Wait(0x{:x}): debounced, deferred release already pending",
+                                "[键鼠捕获] 等待(0x{:x})：已防抖，延迟释放正在等待执行",
                                 session_id,
                             );
                         }
@@ -284,7 +284,7 @@ pub mod client {
                     }
                 }
 
-                log::debug!("[grab] Wait(0x{:x}): releasing grab", session_id);
+                log::debug!("[键鼠捕获] 等待(0x{:x})：正在释放捕获", session_id);
 
                 #[cfg(windows)]
                 rdev::set_get_key_unicode(false);

@@ -208,7 +208,7 @@ pub fn try_empty_clipboard_files_sync(_side: ClipboardSide, _conn_id: i32) -> Re
 
 #[cfg(target_os = "windows")]
 pub fn try_empty_clipboard_files(side: ClipboardSide, conn_id: i32) {
-    log::debug!("try to empty {} cliprdr for conn_id {}", side, conn_id);
+    log::debug!("尝试清空 {} 端剪贴板重定向数据，连接 ID：{}", side, conn_id);
     let _ = clipboard::ContextSend::proc(|context| -> ResultType<()> {
         context.empty_clipboard(conn_id)?;
         Ok(())
@@ -880,7 +880,7 @@ pub mod clipboard_listener {
         }
 
         fn on_clipboard_error(&mut self, error: io::Error) -> CallbackResult {
-            let msg = format!("Clipboard listener error: {}", error);
+            let msg = format!("剪贴板监听器错误：{}", error);
             let sub_lock = self.subscribers.lock().unwrap();
             for tx in sub_lock.values() {
                 tx.send(CallbackResult::StopWithError(io::Error::new(
@@ -900,7 +900,7 @@ pub mod clipboard_listener {
     }
 
     pub fn subscribe(name: String, tx: Sender<CallbackResult>) -> ResultType<()> {
-        log::info!("Subscribe clipboard listener: {}", &name);
+        log::info!("订阅剪贴板监听器：{}", &name);
         let mut listener_lock = CLIPBOARD_LISTENER.lock().unwrap();
         listener_lock
             .subscribers
@@ -910,7 +910,7 @@ pub mod clipboard_listener {
 
         cleanup_stale_listener(&mut listener_lock);
         if listener_lock.handle.is_none() {
-            log::info!("Start clipboard listener thread");
+            log::info!("启动剪贴板监听线程");
             let handler = Handler {
                 subscribers: listener_lock.subscribers.clone(),
             };
@@ -923,14 +923,14 @@ pub mod clipboard_listener {
                 }
 
                 Err(e) => {
-                    bail!("Failed to create clipboard listener: {}", e);
+                    bail!("创建剪贴板监听器失败：{}", e);
                 }
             };
             listener_lock.handle = Some((shutdown, h));
-            log::info!("Clipboard listener thread started");
+            log::info!("剪贴板监听线程已启动");
         }
 
-        log::info!("Clipboard listener subscribed: {}", name);
+        log::info!("剪贴板监听器订阅成功：{}", name);
         Ok(())
     }
 
@@ -944,16 +944,16 @@ pub mod clipboard_listener {
             return;
         }
         if let Some((shutdown, h)) = listener.handle.take() {
-            log::warn!("Cleaning up stale clipboard listener handle");
+            log::warn!("正在清理失效的剪贴板监听器句柄");
             if let Err(e) = h.join() {
-                log::error!("Clipboard listener thread panicked during stale cleanup: {:?}", e);
+                log::error!("清理失效监听器时剪贴板线程发生异常：{:?}", e);
             }
             drop(shutdown);
         }
     }
 
     pub fn unsubscribe(name: &str) {
-        log::info!("Unsubscribe clipboard listener: {}", name);
+        log::info!("取消订阅剪贴板监听器：{}", name);
         let mut listener_lock = CLIPBOARD_LISTENER.lock().unwrap();
         let is_empty = {
             let mut sub_lock = listener_lock.subscribers.lock().unwrap();
@@ -964,13 +964,13 @@ pub mod clipboard_listener {
         };
         if is_empty {
             if let Some((shutdown, h)) = listener_lock.handle.take() {
-                log::info!("Stop clipboard listener thread");
+                log::info!("停止剪贴板监听线程");
                 shutdown.signal();
                 h.join().ok();
-                log::info!("Clipboard listener thread stopped");
+                log::info!("剪贴板监听线程已停止");
             }
         }
-        log::info!("Clipboard listener unsubscribed: {}", name);
+        log::info!("剪贴板监听器已取消订阅：{}", name);
     }
 
     fn start_clipboard_master_thread(
@@ -983,18 +983,18 @@ pub mod clipboard_listener {
                 tx_start_res
                     .send((Some(master.shutdown_channel()), "".to_owned()))
                     .ok();
-                log::debug!("Clipboard listener started");
+                log::debug!("剪贴板监听器已启动");
                 if let Err(err) = master.run() {
-                    log::error!("Failed to run clipboard listener: {}", err);
+                    log::error!("运行剪贴板监听器失败：{}", err);
                 } else {
-                    log::debug!("Clipboard listener stopped");
+                    log::debug!("剪贴板监听器已停止");
                 }
             }
             Err(err) => {
                 tx_start_res
                     .send((
                         None,
-                        format!("Failed to create clipboard listener: {}", err),
+                        format!("创建剪贴板监听器失败：{}", err),
                     ))
                     .ok();
             }

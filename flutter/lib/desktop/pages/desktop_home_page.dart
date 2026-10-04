@@ -439,9 +439,11 @@ class _DesktopHomePageState extends State<DesktopHomePage>
           handleUpdate(updateUrl);
         };
       }
+      final currentVersion =
+          version.isEmpty ? '' : '${translate('Version')}: $version\n';
       return buildInstallCard(
           "Status",
-          "${translate("new-version-of-{${bind.mainGetAppNameSync()}}-tip")} (${bind.mainGetNewVersion()}).",
+          "$currentVersion${translate("new-version-of-{${bind.mainGetAppNameSync()}}-tip")} (${bind.mainGetNewVersion()}).",
           btnText,
           onPressed,
           closeButton: true,

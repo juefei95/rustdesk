@@ -3851,16 +3851,21 @@ class _SimpleLinkSettingsPageState extends State<_SimpleLinkSettingsPage> {
     if (!mounted) return;
     final url = event['url'];
     if (url is! String || url.isEmpty) {
-      showToast('当前已是最新版本');
+      final currentVersion = await bind.mainGetVersion();
+      showToast('当前版本为 $currentVersion，已是最新版本');
       return;
     }
-    final version = event['version'] is String ? event['version'] : '';
+    final latestVersion = event['version'] is String ? event['version'] : '';
+    final currentVersion = await bind.mainGetVersion();
     await showDialog<void>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('发现新版本'),
-        content:
-            Text(version.isEmpty ? '发现可用更新。' : '发现 $version 版本，是否立即下载并安装？'),
+        content: Text(
+          latestVersion.isEmpty
+              ? '当前版本：$currentVersion\n发现可用更新。'
+              : '当前版本：$currentVersion\n最新版本：$latestVersion\n是否立即下载并安装？',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
@@ -3970,6 +3975,48 @@ class _SimpleLinkSettingsPageState extends State<_SimpleLinkSettingsPage> {
           FilledButton(
             onPressed: () => Navigator.of(context).pop(),
             child: const Text('我已了解'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _showAbout() async {
+    final currentVersion = await bind.mainGetVersion();
+    final buildDate = await bind.mainGetBuildDate();
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.info_outline_rounded, color: _brandColor),
+            SizedBox(width: 10),
+            Text('关于点连远程助手'),
+          ],
+        ),
+        content: SizedBox(
+          width: 360,
+          child: SelectionArea(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('版本：$currentVersion'),
+                if (buildDate.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Text('构建日期：$buildDate'),
+                ],
+                const SizedBox(height: 16),
+                const Text('本软件基于开源项目进行个性化定制。'),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('关闭'),
           ),
         ],
       ),
@@ -4115,6 +4162,12 @@ class _SimpleLinkSettingsPageState extends State<_SimpleLinkSettingsPage> {
                             icon: Icons.description_outlined,
                             title: '用户协议',
                             onTap: _showUserAgreement,
+                          ),
+                          const Divider(height: 1, color: Color(0xFFE4EAF4)),
+                          _SettingsActionRow(
+                            icon: Icons.info_outline_rounded,
+                            title: '关于',
+                            onTap: _showAbout,
                           ),
                         ],
                       ),

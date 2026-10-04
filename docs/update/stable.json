@@ -1,10 +1,10 @@
 {
   "channel": "stable",
-  "version": "1.5.0",
+  "version": "1.5.1",
   "mandatory": false,
   "windows": {
-    "url": "https://download.zhenhaiedu.top/dianlian-1.5.0-install.exe",
-    "sha256": "120414573FDF124893CA662829E9339C8E1A1C8EC56FBFC36B517C9B290652D4",
-    "size": 22640128
+    "url": "https://download.zhenhaiedu.top/dianlian-1.5.1-install.exe",
+    "sha256": "5A96483CBCF4AF9F841FEC54EE782055BF7E385C284A0A0D15A86D904F41144D",
+    "size": 22672384
   }
 }

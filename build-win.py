@@ -9,6 +9,7 @@ import zipfile
 import urllib.request
 import shutil
 import hashlib
+import json
 import re
 import subprocess
 import argparse
@@ -68,6 +69,37 @@ def get_version():
             if line.startswith("version"):
                 return line.replace("version", "").replace("=", "").replace('"', '').strip()
     return ''
+
+
+def update_stable_windows_manifest(version, installer_path):
+    installer_path = Path(installer_path)
+    if not installer_path.is_file():
+        raise FileNotFoundError(f'Windows installer not found: {installer_path}')
+
+    manifest_path = Path(REPO_ROOT) / 'docs' / 'update' / 'stable.json'
+    with manifest_path.open(encoding='utf-8') as file:
+        manifest = json.load(file)
+
+    windows = manifest.get('windows')
+    if not isinstance(windows, dict) or not windows.get('url'):
+        raise ValueError(f'Invalid Windows update manifest: {manifest_path}')
+
+    digest = hashlib.sha256()
+    with installer_path.open('rb') as file:
+        for chunk in iter(lambda: file.read(1024 * 1024), b''):
+            digest.update(chunk)
+
+    manifest['version'] = version
+    windows['url'] = windows['url'].rsplit('/', 1)[0] + '/' + installer_path.name
+    windows['sha256'] = digest.hexdigest().upper()
+    windows['size'] = installer_path.stat().st_size
+
+    temporary_path = manifest_path.with_suffix('.json.tmp')
+    with temporary_path.open('w', encoding='utf-8', newline='\n') as file:
+        json.dump(manifest, file, ensure_ascii=False, indent=2)
+        file.write('\n')
+    temporary_path.replace(manifest_path)
+    print(f'updated stable manifest: {manifest_path}')
 
 
 def parse_rc_features(feature):
@@ -962,6 +994,7 @@ def build_flutter_windows(version, features, skip_portable_pack):
     os.replace('./rustdesk_portable.exe', f'./dianlian-{version}-install.exe')
     print(
         f'output location: {os.path.abspath(os.curdir)}/dianlian-{version}-install.exe')
+    update_stable_windows_manifest(version, f'dianlian-{version}-install.exe')
 
 
 def main():

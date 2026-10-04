@@ -4291,6 +4291,8 @@ class _PlanCard extends StatelessWidget {
   Widget build(BuildContext context) {
     const brandColor = Color(0xFF1769FF);
     const features = ['远程连接', '文件传输', '高清画质', '多设备使用'];
+    final originalPrice = double.tryParse(package.originalPrice) ??
+        (double.tryParse(package.price) ?? 0) * 2;
     return Container(
       height: 316,
       clipBehavior: Clip.antiAlias,
@@ -4359,13 +4361,29 @@ class _PlanCard extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: 8),
-                Text(
-                  '¥${package.price}',
-                  style: const TextStyle(
-                    color: brandColor,
-                    fontSize: 30,
-                    fontWeight: FontWeight.w900,
-                  ),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.baseline,
+                  textBaseline: TextBaseline.alphabetic,
+                  children: [
+                    Text(
+                      '¥${package.price}',
+                      style: const TextStyle(
+                        color: brandColor,
+                        fontSize: 30,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      '¥${originalPrice.toStringAsFixed(2)}',
+                      style: const TextStyle(
+                        color: Color(0xFF98A2B3),
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        decoration: TextDecoration.lineThrough,
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 4),
                 Text(

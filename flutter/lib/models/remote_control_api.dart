@@ -82,6 +82,7 @@ class RemoteControlPackage {
     required this.name,
     required this.days,
     required this.price,
+    required this.originalPrice,
     required this.recommended,
     required this.description,
   });
@@ -90,6 +91,7 @@ class RemoteControlPackage {
   final String name;
   final int days;
   final String price;
+  final String originalPrice;
   final bool recommended;
   final String description;
 
@@ -99,6 +101,7 @@ class RemoteControlPackage {
       name: (json['name'] ?? '').toString().trim(),
       days: int.tryParse((json['days'] ?? '').toString()) ?? 0,
       price: (json['price'] ?? '').toString().trim(),
+      originalPrice: (json['original_price'] ?? '').toString().trim(),
       recommended: json['recommended'] == 1 || json['recommended'] == true,
       description: (json['description'] ?? '').toString().trim(),
     );

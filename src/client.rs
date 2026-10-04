@@ -447,6 +447,12 @@ impl Client {
             (None, None)
         };
         let udp_nat_port = udp.1.map(|x| *x.lock().unwrap()).unwrap_or(0);
+        if crate::get_udp_punch_enabled() && !interface.is_force_relay() && udp_nat_port == 0 {
+            log::warn!(
+                "UDP 打洞未启动：UDP NAT 测试未在 rendezvous RTT 一半（{:?}）内获取公网 UDP 端口，将改用 TCP 打洞",
+                rtt / 2
+            );
+        }
         let punch_type = if udp_nat_port > 0 { "UDP" } else { "TCP" };
         msg_out.set_punch_hole_request(PunchHoleRequest {
             id: peer.to_owned(),

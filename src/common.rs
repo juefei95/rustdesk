@@ -626,7 +626,7 @@ pub fn test_nat_type() {
             match test_nat_type_() {
                 Ok(true) => break,
                 Err(err) => {
-                    log::error!("test nat: {}", err);
+                    log::error!("NAT 类型检测失败：{}", err);
                 }
                 _ => {}
             }
@@ -646,7 +646,7 @@ pub fn test_nat_type() {
 
 #[tokio::main(flavor = "current_thread")]
 async fn test_nat_type_() -> ResultType<bool> {
-    log::info!("Testing nat ...");
+    log::info!("正在检测 NAT 类型...");
     let start = std::time::Instant::now();
     let server1 = Config::get_rendezvous_server();
     let server2 = crate::increase_port(&server1, -1);
@@ -674,7 +674,7 @@ async fn test_nat_type_() -> ResultType<bool> {
         socket.send(&msg_out).await?;
         if let Some(msg_in) = get_next_nonkeyexchange_msg(&mut socket, None).await {
             if let Some(rendezvous_message::Union::TestNatResponse(tnr)) = msg_in.union {
-                log::debug!("Got nat response from {}: port={}", server, tnr.port);
+                log::debug!("收到来自 {} 的 NAT 检测响应：公网端口={}", server, tnr.port);
                 if i == 0 {
                     port1 = tnr.port;
                 } else {
@@ -700,7 +700,12 @@ async fn test_nat_type_() -> ResultType<bool> {
             NatType::SYMMETRIC
         };
         Config::set_nat_type(t as _);
-        log::info!("Tested nat type: {:?} in {:?}", t, start.elapsed());
+        let nat_type = if t == NatType::SYMMETRIC {
+            "对称 NAT"
+        } else {
+            "非对称 NAT"
+        };
+        log::info!("NAT 类型检测完成：{}，耗时：{:?}", nat_type, start.elapsed());
     }
     Ok(ok)
 }

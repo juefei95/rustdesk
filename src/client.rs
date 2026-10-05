@@ -383,6 +383,7 @@ impl Client {
         let mut socket = connect_tcp(&*rendezvous_server, CONNECT_TIMEOUT).await;
         debug_assert!(!servers.contains(&rendezvous_server));
         let rtt = start.elapsed();
+        let udp_nat_wait_timeout = std::cmp::max(rtt / 2, Duration::from_millis(500));
         log::debug!("TCP 连接建立耗时：{:?}", rtt);
         if socket.is_err() && !servers.is_empty() {
             log::info!("正在尝试其他协调服务器：{:?}", servers);
@@ -427,8 +428,8 @@ impl Client {
                 if port > 0 {
                     break;
                 }
-                // await for 0.5 RTT
-                if tm.elapsed() > rtt / 2 {
+                // await for at least 500 ms
+                if tm.elapsed() > udp_nat_wait_timeout {
                     break;
                 }
                 hbb_common::sleep(0.001).await;
@@ -446,11 +447,15 @@ impl Client {
         } else {
             (None, None)
         };
-        let udp_nat_port = udp.1.map(|x| *x.lock().unwrap()).unwrap_or(0);
-        if crate::get_udp_punch_enabled() && !interface.is_force_relay() && udp_nat_port == 0 {
+        let udp_nat_port = udp
+            .1
+            .as_ref()
+            .map(|x| *x.lock().unwrap())
+            .unwrap_or(0);
+        if udp.1.is_some() && udp_nat_port == 0 {
             log::warn!(
-                "UDP 打洞未启动：UDP NAT 测试未在 rendezvous RTT 一半（{:?}）内获取公网 UDP 端口，将改用 TCP 打洞",
-                rtt / 2
+                "UDP 打洞未启动：UDP NAT 测试未在等待时间（{:?}）内获取公网 UDP 端口，将改用 TCP 打洞",
+                udp_nat_wait_timeout
             );
         }
         let punch_type = if udp_nat_port > 0 { "UDP" } else { "TCP" };

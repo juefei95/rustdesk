@@ -60,7 +60,7 @@ class _SimpleLinkDesktopPageState extends State<SimpleLinkDesktopPage>
       if (call.method == 'openSettings') {
         await windowManager.show();
         await windowManager.focus();
-        _selectPage(3);
+        _selectPage(4);
       }
     });
   }
@@ -156,9 +156,10 @@ class _SimpleLinkDesktopPageState extends State<SimpleLinkDesktopPage>
                           children: [
                             _ProductHomePage(
                               onOpenDevices: () => _selectPage(1),
-                              onOpenMembership: () => _selectPage(2),
+                              onOpenMembership: () => _selectPage(3),
                             ),
                             const _DeviceListPage(),
+                            const _IntranetPenetrationPage(),
                             _MembershipPage(onLogin: _openLoginPage),
                             const _SimpleLinkSettingsPage(),
                             // Keeps the existing main-window lifecycle active while
@@ -200,18 +201,25 @@ class _SimpleLinkDesktopPageState extends State<SimpleLinkDesktopPage>
             onTap: () => _selectPage(1),
           ),
           _NavigationItem(
+            icon: Icons.account_tree_outlined,
+            selectedIcon: Icons.account_tree_rounded,
+            label: '内网穿透',
+            selected: _selectedPage == 2,
+            onTap: () => _selectPage(2),
+          ),
+          _NavigationItem(
             icon: Icons.card_membership_outlined,
             selectedIcon: Icons.card_membership_rounded,
             label: '会员中心',
-            selected: _selectedPage == 2,
-            onTap: () => _selectPage(2),
+            selected: _selectedPage == 3,
+            onTap: () => _selectPage(3),
           ),
           _NavigationItem(
             icon: Icons.settings_outlined,
             selectedIcon: Icons.settings_rounded,
             label: translate('Settings'),
-            selected: _selectedPage == 3,
-            onTap: () => _selectPage(3),
+            selected: _selectedPage == 4,
+            onTap: () => _selectPage(4),
           ),
         ],
       ),
@@ -259,7 +267,7 @@ class _SimpleLinkDesktopPageState extends State<SimpleLinkDesktopPage>
                 }
                 return _AccountMenuButton(
                   userName: gFFI.userModel.displayNameOrUserName,
-                  onProfile: () => _selectPage(2),
+                  onProfile: () => _selectPage(3),
                   onLogout: logOutConfirmDialog,
                 );
               }),
@@ -2976,6 +2984,137 @@ String _platformLabel(String platform) {
   if (platform == kPeerPlatformAndroid) return 'Android';
   if (platform == kPeerPlatformLinux) return 'Linux';
   return 'Windows';
+}
+
+class _IntranetPenetrationPage extends StatelessWidget {
+  const _IntranetPenetrationPage();
+
+  @override
+  Widget build(BuildContext context) {
+    return ColoredBox(
+      color: const Color(0xFFF8FAFD),
+      child: LayoutBuilder(
+        builder: (context, constraints) => Padding(
+          padding: const EdgeInsets.all(28),
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 900),
+              child: SizedBox(
+                height: constraints.maxHeight,
+                child: _ProductCard(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      const Text(
+                        '内网穿透',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF17213A),
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      const Text(
+                        '将当前电脑的本地服务安全地映射到外部网络。',
+                        style: TextStyle(color: Color(0xFF687386)),
+                      ),
+                      const SizedBox(height: 20),
+                      Container(
+                        padding: const EdgeInsets.all(20),
+                        decoration: BoxDecoration(
+                          border: Border.all(color: const Color(0xFFE0E5ED)),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Row(
+                              children: [
+                                const Expanded(
+                                  child: Text(
+                                    'Windows 远程桌面',
+                                    style: TextStyle(
+                                      fontSize: 17,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 9, vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFF2F4F7),
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: const Text(
+                                    '未启动',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 20),
+                            const _PenetrationInfoRow(
+                              label: '本地端口',
+                              value: '3389',
+                            ),
+                            const SizedBox(height: 14),
+                            const _PenetrationInfoRow(
+                              label: '公网映射端口',
+                              value: '由服务器分配',
+                            ),
+                            const SizedBox(height: 20),
+                            FilledButton.icon(
+                              onPressed: () => showToast('内网穿透功能即将开放'),
+                              icon: const Icon(Icons.play_circle_outline),
+                              label: const Text('启动穿透流程'),
+                              style: FilledButton.styleFrom(
+                                backgroundColor: const Color(0xFF101010),
+                                foregroundColor: Colors.white,
+                                minimumSize: const Size.fromHeight(44),
+                                shape: const StadiumBorder(),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PenetrationInfoRow extends StatelessWidget {
+  const _PenetrationInfoRow({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Text(label, style: const TextStyle(color: Color(0xFF687386))),
+        const Spacer(),
+        Text(
+          value,
+          style: const TextStyle(
+            color: Color(0xFF17213A),
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      ],
+    );
+  }
 }
 
 class _MembershipPage extends StatefulWidget {

@@ -152,7 +152,7 @@ void runMainApp(bool startService) async {
   // Set window option.
   WindowOptions windowOptions = getHiddenTitleBarWindowOptions(
     isMainWindow: true,
-    size: bind.isIncomingOnly() ? null : const Size(1032, 700),
+    size: bind.isIncomingOnly() ? null : const Size(1072, 700),
     center: !bind.isIncomingOnly(),
     alwaysOnTop: alwaysOnTop,
   );
@@ -160,7 +160,7 @@ void runMainApp(bool startService) async {
     // Restore the location of the main window before window hide or show.
     await restoreWindowPosition(WindowType.Main);
     if (!bind.isIncomingOnly()) {
-      await windowManager.setSize(const Size(1032, 700));
+      await windowManager.setSize(const Size(1072, 700));
     }
     // Check the startup argument, if we successfully handle the argument, we keep the main window hidden.
     final handledByUniLinks = await initUniLinks();

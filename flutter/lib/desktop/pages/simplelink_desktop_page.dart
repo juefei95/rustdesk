@@ -1,5 +1,7 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
@@ -180,7 +182,7 @@ class _SimpleLinkDesktopPageState extends State<SimpleLinkDesktopPage>
 
   Widget _buildSidebar(BuildContext context) {
     return Container(
-      width: 150,
+      width: 190,
       color: _sidebarColor,
       padding: const EdgeInsets.fromLTRB(12, 24, 12, 14),
       child: Column(
@@ -203,7 +205,7 @@ class _SimpleLinkDesktopPageState extends State<SimpleLinkDesktopPage>
           _NavigationItem(
             icon: Icons.account_tree_outlined,
             selectedIcon: Icons.account_tree_rounded,
-            label: '内网穿透',
+            label: 'Win远程桌面',
             selected: _selectedPage == 2,
             onTap: () => _selectPage(2),
           ),
@@ -2986,8 +2988,69 @@ String _platformLabel(String platform) {
   return 'Windows';
 }
 
-class _IntranetPenetrationPage extends StatelessWidget {
+class _IntranetPenetrationPage extends StatefulWidget {
   const _IntranetPenetrationPage();
+
+  @override
+  State<_IntranetPenetrationPage> createState() =>
+      _IntranetPenetrationPageState();
+}
+
+class _IntranetPenetrationPageState extends State<_IntranetPenetrationPage> {
+  _RemoteControlAvailability _availability =
+      const _RemoteControlAvailability.notChecked();
+  bool _checking = false;
+  bool _enabling = false;
+
+  Future<void> _checkRemoteControlAvailability() async {
+    if (_checking) return;
+    setState(() => _checking = true);
+    try {
+      final availability = await _RemoteControlAvailability.detect();
+      if (!mounted) return;
+      setState(() => _availability = availability);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _availability = const _RemoteControlAvailability.failed());
+    } finally {
+      if (mounted) setState(() => _checking = false);
+    }
+  }
+
+  Future<void> _enableRemoteControl() async {
+    if (_enabling) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('开启被远程控制'),
+        content: const Text(
+          '将启用 Windows 远程桌面并启动远程桌面服务。系统会请求管理员授权；本操作不会修改防火墙规则。',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('继续'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    setState(() => _enabling = true);
+    try {
+      await _enableWindowsRemoteDesktop();
+      if (!mounted) return;
+      showToast('已启用远程桌面，正在刷新检测结果');
+      await _checkRemoteControlAvailability();
+    } on ProcessException {
+      if (mounted) showToast('未能启用远程桌面，请确认已授予管理员权限');
+    } finally {
+      if (mounted) setState(() => _enabling = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -2999,8 +3062,7 @@ class _IntranetPenetrationPage extends StatelessWidget {
           child: Center(
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 900),
-              child: SizedBox(
-                height: constraints.maxHeight,
+              child: SingleChildScrollView(
                 child: _ProductCard(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -3081,6 +3143,17 @@ class _IntranetPenetrationPage extends StatelessWidget {
                           ],
                         ),
                       ),
+                      const SizedBox(height: 18),
+                      _RemoteControlAvailabilityCard(
+                        availability: _availability,
+                        checking: _checking,
+                        onCheck: _checkRemoteControlAvailability,
+                      ),
+                      const SizedBox(height: 14),
+                      _RemoteControlEnableCard(
+                        enabling: _enabling,
+                        onEnable: _enableRemoteControl,
+                      ),
                     ],
                   ),
                 ),
@@ -3113,6 +3186,586 @@ class _PenetrationInfoRow extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _RemoteControlAvailabilityCard extends StatelessWidget {
+  const _RemoteControlAvailabilityCard({
+    required this.availability,
+    required this.checking,
+    required this.onCheck,
+  });
+
+  final _RemoteControlAvailability availability;
+  final bool checking;
+  final VoidCallback onCheck;
+
+  @override
+  Widget build(BuildContext context) {
+    return _IntranetSectionCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Text(
+            '远程控制可用性检测',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w700,
+              color: Color(0xFF17213A),
+            ),
+          ),
+          const SizedBox(height: 6),
+          const Text(
+            '检测当前电脑是否支持开启 Windows 远程桌面与被远程控制功能。',
+            style: TextStyle(color: Color(0xFF687386)),
+          ),
+          const SizedBox(height: 14),
+          _RemoteControlCheckRow(
+            icon: Icons.window_rounded,
+            label: '系统版本',
+            value: availability.osVersion,
+            state: availability.systemState,
+          ),
+          _RemoteControlCheckRow(
+            icon: Icons.desktop_windows_outlined,
+            label: '远程桌面主机能力',
+            value: availability.hostCapability,
+            state: availability.hostState,
+          ),
+          _RemoteControlCheckRow(
+            icon: Icons.security_rounded,
+            label: '管理员权限',
+            value: availability.adminCapability,
+            state: availability.adminState,
+          ),
+          _RemoteControlCheckRow(
+            icon: Icons.settings_rounded,
+            label: '远程桌面服务',
+            value: availability.serviceCapability,
+            state: availability.serviceState,
+          ),
+          const SizedBox(height: 12),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              TextButton(
+                onPressed: () => _showRemoteControlInstructions(context),
+                child: const Text('查看说明'),
+              ),
+              const SizedBox(width: 10),
+              FilledButton.icon(
+                onPressed: checking ? null : onCheck,
+                icon: checking
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : const Icon(Icons.refresh_rounded, size: 18),
+                label: Text(checking ? '检测中' : '立即检测'),
+                style: FilledButton.styleFrom(
+                  minimumSize: const Size(112, 38),
+                  backgroundColor: const Color(0xFF1769FF),
+                  foregroundColor: Colors.white,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _RemoteControlEnableCard extends StatelessWidget {
+  const _RemoteControlEnableCard({
+    required this.enabling,
+    required this.onEnable,
+  });
+
+  final bool enabling;
+  final VoidCallback onEnable;
+
+  @override
+  Widget build(BuildContext context) {
+    return _IntranetSectionCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '开启被远程控制',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF17213A),
+                      ),
+                    ),
+                    SizedBox(height: 6),
+                    Text(
+                      '通过系统属性启用 Windows 远程桌面，并完成必要配置。',
+                      style: TextStyle(color: Color(0xFF687386)),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE9F9F0),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: const Row(
+                  children: [
+                    Icon(Icons.check_circle,
+                        size: 18, color: Color(0xFF18A965)),
+                    SizedBox(width: 6),
+                    Text(
+                      '当前评估：此电脑支持开启被远程控制功能',
+                      style: TextStyle(
+                        color: Color(0xFF18A965),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: _RemoteControlEnableStep(
+                  number: '1',
+                  icon: Icons.desktop_windows_rounded,
+                  title: '打开系统属性的远程设置',
+                  detail: '此电脑属性 → 高级系统设置 → 远程',
+                  onTap: _openRemoteDesktopSettings,
+                ),
+              ),
+              Padding(
+                padding: EdgeInsets.symmetric(horizontal: 10),
+                child:
+                    Icon(Icons.chevron_right_rounded, color: Color(0xFF1769FF)),
+              ),
+              Expanded(
+                child: _RemoteControlEnableStep(
+                  number: '2',
+                  icon: Icons.check_circle_outline_rounded,
+                  title: '允许远程连接到此计算机',
+                  detail: '在远程页勾选后应用设置',
+                  onTap: _openRemoteDesktopSettings,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFEAF2FF),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Row(
+                    children: [
+                      Icon(Icons.info, size: 18, color: Color(0xFF1769FF)),
+                      SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          '提示：一键开启将请求管理员授权；Windows 家庭版通常不支持作为远程桌面主机。',
+                          style:
+                              TextStyle(color: Color(0xFF1769FF), fontSize: 12),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              FilledButton.icon(
+                onPressed: enabling ? null : onEnable,
+                icon: enabling
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : const Icon(Icons.power_settings_new_rounded),
+                label: Text(enabling ? '开启中' : '一键开启被控制功能'),
+                style: FilledButton.styleFrom(
+                  backgroundColor: const Color(0xFF1769FF),
+                  foregroundColor: Colors.white,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+Future<void> _openRemoteDesktopSettings() async {
+  if (!Platform.isWindows) {
+    showToast('仅支持在 Windows 上打开远程桌面设置');
+    return;
+  }
+  try {
+    await Process.start('SystemPropertiesRemote.exe', const []);
+  } on ProcessException {
+    showToast('无法打开 Windows 远程桌面设置');
+  }
+}
+
+Future<void> _enableWindowsRemoteDesktop() async {
+  if (!Platform.isWindows) {
+    throw ProcessException('SystemPropertiesRemote.exe', const []);
+  }
+  const command = r'''$ErrorActionPreference = 'Stop'
+Set-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server' -Name 'fDenyTSConnections' -Value 0
+Set-Service -Name 'TermService' -StartupType Manual
+Start-Service -Name 'TermService' -ErrorAction SilentlyContinue''';
+  final encodedCommand = _powershellEncodedCommand(command);
+  final result = await Process.run(
+    'powershell.exe',
+    [
+      '-NoProfile',
+      '-NonInteractive',
+      '-Command',
+      "\$process = Start-Process -FilePath 'powershell.exe' -Verb RunAs -PassThru -Wait -ArgumentList '-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-EncodedCommand','$encodedCommand'; if (\$process.ExitCode -ne 0) { exit \$process.ExitCode }",
+    ],
+  );
+  if (result.exitCode != 0) {
+    throw ProcessException(
+      'powershell.exe',
+      const [],
+      result.stderr.toString(),
+      result.exitCode,
+    );
+  }
+}
+
+String _powershellEncodedCommand(String command) {
+  final bytes = Uint8List(command.length * 2);
+  for (var index = 0; index < command.length; index++) {
+    final codeUnit = command.codeUnitAt(index);
+    bytes[index * 2] = codeUnit & 0xff;
+    bytes[index * 2 + 1] = codeUnit >> 8;
+  }
+  return base64.encode(bytes);
+}
+
+Future<void> _showRemoteControlInstructions(BuildContext context) {
+  return _showRemoteControlDialog(
+    context,
+    title: '远程控制说明',
+    content: '此页面检测 Windows 远程桌面作为被控端的可用条件。\n\n'
+        '1. “管理员权限”仅在需要自动修改系统设置时才需要。\n\n'
+        '2. 手动在 Windows 设置中启用远程桌面时，可按系统提示完成授权。',
+  );
+}
+
+Future<void> _showRemoteControlDialog(
+  BuildContext context, {
+  required String title,
+  required String content,
+  String? actionLabel,
+  Future<void> Function()? onAction,
+}) {
+  return showDialog<void>(
+    context: context,
+    builder: (dialogContext) => AlertDialog(
+      title: Text(title),
+      content: SizedBox(
+        width: 440,
+        child: Text(
+          content,
+          style: const TextStyle(color: Color(0xFF526078), height: 1.5),
+        ),
+      ),
+      actions: [
+        if (actionLabel != null && onAction != null)
+          TextButton(
+            onPressed: () async {
+              Navigator.of(dialogContext).pop();
+              await onAction();
+            },
+            child: Text(actionLabel),
+          ),
+        FilledButton(
+          onPressed: () => Navigator.of(dialogContext).pop(),
+          child: const Text('知道了'),
+        ),
+      ],
+    ),
+  );
+}
+
+class _IntranetSectionCard extends StatelessWidget {
+  const _IntranetSectionCard({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border.all(color: const Color(0xFFE0E5ED)),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: child,
+    );
+  }
+}
+
+enum _RemoteControlCheckState {
+  pending,
+  supported,
+  actionRequired,
+  unavailable
+}
+
+class _RemoteControlAvailability {
+  const _RemoteControlAvailability({
+    required this.osVersion,
+    required this.systemState,
+    required this.hostCapability,
+    required this.hostState,
+    required this.adminCapability,
+    required this.adminState,
+    required this.serviceCapability,
+    required this.serviceState,
+  });
+
+  const _RemoteControlAvailability.notChecked()
+      : this(
+          osVersion: '等待检测',
+          systemState: _RemoteControlCheckState.pending,
+          hostCapability: '等待检测',
+          hostState: _RemoteControlCheckState.pending,
+          adminCapability: '等待检测',
+          adminState: _RemoteControlCheckState.pending,
+          serviceCapability: '等待检测',
+          serviceState: _RemoteControlCheckState.pending,
+        );
+
+  const _RemoteControlAvailability.failed()
+      : this(
+          osVersion: '检测失败，请稍后重试',
+          systemState: _RemoteControlCheckState.unavailable,
+          hostCapability: '无法确认',
+          hostState: _RemoteControlCheckState.unavailable,
+          adminCapability: '无法确认',
+          adminState: _RemoteControlCheckState.unavailable,
+          serviceCapability: '无法确认',
+          serviceState: _RemoteControlCheckState.unavailable,
+        );
+
+  final String osVersion;
+  final _RemoteControlCheckState systemState;
+  final String hostCapability;
+  final _RemoteControlCheckState hostState;
+  final String adminCapability;
+  final _RemoteControlCheckState adminState;
+  final String serviceCapability;
+  final _RemoteControlCheckState serviceState;
+
+  static Future<_RemoteControlAvailability> detect() async {
+    if (!Platform.isWindows) {
+      return const _RemoteControlAvailability.failed();
+    }
+    const command = r'''$os = Get-CimInstance Win32_OperatingSystem
+$edition = (Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion').EditionID
+$rdp = (Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server').fDenyTSConnections -eq 0
+$service = Get-CimInstance Win32_Service -Filter "Name='TermService'" -ErrorAction SilentlyContinue
+$identity = [Security.Principal.WindowsIdentity]::GetCurrent()
+$admin = (New-Object Security.Principal.WindowsPrincipal($identity)).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+[pscustomobject]@{ os = $os.Caption; edition = $edition; rdp = $rdp; serviceState = $service.State; serviceStartMode = $service.StartMode; admin = $admin } | ConvertTo-Json -Compress''';
+    final result = await Process.run(
+      'powershell.exe',
+      ['-NoProfile', '-NonInteractive', '-Command', command],
+    );
+    if (result.exitCode != 0) {
+      throw ProcessException(
+        'powershell.exe',
+        const [],
+        result.stderr.toString(),
+        result.exitCode,
+      );
+    }
+    final data = jsonDecode(result.stdout.toString()) as Map<String, dynamic>;
+    final edition = data['edition']?.toString() ?? '';
+    final supportsHost = !edition.toLowerCase().startsWith('core');
+    final rdpEnabled = data['rdp'] == true;
+    final serviceState = data['serviceState']?.toString() ?? 'Missing';
+    final serviceStartMode = data['serviceStartMode']?.toString() ?? 'Disabled';
+    final serviceAvailable =
+        serviceState != 'Missing' && serviceStartMode != 'Disabled';
+    final isAdmin = data['admin'] == true;
+    return _RemoteControlAvailability(
+      osVersion: data['os']?.toString() ?? 'Windows',
+      systemState: _RemoteControlCheckState.supported,
+      hostCapability: supportsHost ? '可作为被控端' : '当前 Windows 版本不支持',
+      hostState: supportsHost
+          ? _RemoteControlCheckState.supported
+          : _RemoteControlCheckState.unavailable,
+      adminCapability: isAdmin ? '已获取管理员权限' : '请以管理员身份运行',
+      adminState: isAdmin
+          ? _RemoteControlCheckState.supported
+          : _RemoteControlCheckState.actionRequired,
+      serviceCapability: !serviceAvailable
+          ? '服务不可用'
+          : (rdpEnabled
+              ? (serviceState == 'Running' ? '服务正在运行' : '服务已就绪')
+              : '远程桌面未启用'),
+      serviceState: serviceAvailable && rdpEnabled
+          ? _RemoteControlCheckState.supported
+          : _RemoteControlCheckState.actionRequired,
+    );
+  }
+}
+
+class _RemoteControlCheckRow extends StatelessWidget {
+  const _RemoteControlCheckRow({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.state,
+  });
+
+  final IconData icon;
+  final String label;
+  final String value;
+  final _RemoteControlCheckState state;
+
+  @override
+  Widget build(BuildContext context) {
+    final (status, statusColor, statusIcon) = switch (state) {
+      _RemoteControlCheckState.pending => (
+          '未检测',
+          const Color(0xFF7C8798),
+          Icons.help_outline_rounded
+        ),
+      _RemoteControlCheckState.supported => (
+          '支持',
+          const Color(0xFF18A965),
+          Icons.check_circle
+        ),
+      _RemoteControlCheckState.actionRequired => (
+          '待处理',
+          const Color(0xFFF58A00),
+          Icons.error
+        ),
+      _RemoteControlCheckState.unavailable => (
+          '不支持',
+          const Color(0xFF7C8798),
+          Icons.remove_circle
+        ),
+    };
+    return Container(
+      margin: const EdgeInsets.only(bottom: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF6F8FC),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, size: 19, color: const Color(0xFF1769FF)),
+          const SizedBox(width: 14),
+          SizedBox(width: 190, child: Text(label)),
+          Expanded(
+              child: Text(value,
+                  style: const TextStyle(color: Color(0xFF526078)))),
+          Icon(statusIcon, size: 19, color: statusColor),
+          const SizedBox(width: 8),
+          SizedBox(
+            width: 52,
+            child: Text(
+              status,
+              style: TextStyle(color: statusColor, fontWeight: FontWeight.w600),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _RemoteControlEnableStep extends StatelessWidget {
+  const _RemoteControlEnableStep({
+    required this.number,
+    required this.icon,
+    required this.title,
+    required this.detail,
+    required this.onTap,
+  });
+
+  final String number;
+  final IconData icon;
+  final String title;
+  final String detail;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: const Color(0xFFF6F8FC),
+      borderRadius: BorderRadius.circular(8),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Row(
+            children: [
+              CircleAvatar(
+                radius: 14,
+                backgroundColor: const Color(0xFFEAF2FF),
+                child: Text(number,
+                    style: const TextStyle(
+                        color: Color(0xFF1769FF), fontWeight: FontWeight.w700)),
+              ),
+              const SizedBox(width: 10),
+              Icon(icon, size: 28, color: const Color(0xFF1769FF)),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title,
+                        style: const TextStyle(fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 3),
+                    Text(detail,
+                        style: const TextStyle(
+                            color: Color(0xFF687386), fontSize: 11)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

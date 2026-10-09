@@ -3388,7 +3388,7 @@ class _RemoteControlEnableCard extends StatelessWidget {
                       SizedBox(width: 8),
                       Expanded(
                         child: Text(
-                          '提示：一键开启将请求管理员授权；Windows 家庭版通常不支持作为远程桌面主机。',
+                          '提示：家庭版 Windows 通常不支持作为远程桌面被控端，如检测不支持，可改用点连远程协助模式。',
                           style:
                               TextStyle(color: Color(0xFF1769FF), fontSize: 12),
                         ),

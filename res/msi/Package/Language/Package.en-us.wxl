@@ -24,7 +24,7 @@ This file contains the declaration of all the localizable strings.
 	<String Id="F_LAVFilters" Value="LAV Filters" />
 	<String Id="F_LAVFilters_Desc" Value="Recommended directshow filters for best audio and video playback experience." />
 
-	<String Id="SC_Client" Value="RustDesk" />
+	<String Id="SC_Client" Value="DianLian" />
 	<String Id="SC_Client_Desc" Value="Start RustDesk." />
 
 	<String Id="SC_Client_Tray" Value="RustDesk Tray" />

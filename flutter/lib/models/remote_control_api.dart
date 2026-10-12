@@ -79,12 +79,14 @@ class RemoteControlMembership {
 class RemoteControlRdpTunnel {
   const RemoteControlRdpTunnel({
     required this.status,
+    required this.mustStop,
     required this.publicHost,
     required this.publicPort,
     required this.proxyName,
   });
 
   final String status;
+  final bool mustStop;
   final String publicHost;
   final int? publicPort;
   final String proxyName;
@@ -93,6 +95,7 @@ class RemoteControlRdpTunnel {
     final port = int.tryParse((json['public_port'] ?? '').toString());
     return RemoteControlRdpTunnel(
       status: (json['status'] ?? '').toString(),
+      mustStop: json['must_stop'] == true || json['must_stop'].toString() == '1',
       publicHost: (json['public_host'] ?? '').toString().trim(),
       publicPort: port != null && port > 0 ? port : null,
       proxyName: (json['proxy_name'] ?? '').toString().trim(),
@@ -592,6 +595,18 @@ class RemoteControlApi {
 
   static Future<RemoteControlRdpTunnel> closeRdpTunnel(String deviceId) async {
     return _postRdpTunnelAction('close', deviceId);
+  }
+
+  static Future<RemoteControlRdpTunnel> rdpTunnelStatus(
+      String deviceId) async {
+    final token = bind.mainGetLocalOption(key: accessTokenKey);
+    if (token.isEmpty) {
+      throw RemoteControlApiException('请先登录');
+    }
+    final uri = Uri.parse('$server/api/remote/rdp/status')
+        .replace(queryParameters: {'device_id': deviceId});
+    final response = await http.get(uri, headers: {'token': token});
+    return RemoteControlRdpTunnel.fromJson(_decode(response));
   }
 
   static Future<RemoteControlRdpTunnel> _postRdpTunnelAction(

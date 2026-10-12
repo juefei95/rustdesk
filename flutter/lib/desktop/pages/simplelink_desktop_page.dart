@@ -3005,6 +3005,8 @@ class _IntranetPenetrationPageState extends State<_IntranetPenetrationPage> {
   Process? _frpcProcess;
   RemoteControlRdpTunnel? _tunnel;
   String _frpcLog = '';
+  Timer? _tunnelHeartbeatTimer;
+  bool _checkingTunnelHeartbeat = false;
 
   void _writeFrpcLog(String message, {bool error = false}) {
     debugPrint('[FRPC] $message');
@@ -3035,6 +3037,63 @@ class _IntranetPenetrationPageState extends State<_IntranetPenetrationPage> {
 
   String _quotePowerShellArgument(String value) {
     return "'${value.replaceAll("'", "''")}'";
+  }
+
+  void _startTunnelHeartbeat(String deviceId) {
+    _stopTunnelHeartbeat();
+    _tunnelHeartbeatTimer = Timer.periodic(
+      const Duration(minutes: 30),
+      (_) => unawaited(_checkTunnelHeartbeat(deviceId)),
+    );
+  }
+
+  void _stopTunnelHeartbeat() {
+    _tunnelHeartbeatTimer?.cancel();
+    _tunnelHeartbeatTimer = null;
+  }
+
+  Future<void> _showMembershipExpiredNotification() async {
+    if (!Platform.isWindows) return;
+    try {
+      await Process.start(
+        Platform.resolvedExecutable,
+        const ['--membership-expired-notification'],
+        mode: ProcessStartMode.detached,
+      );
+    } catch (error) {
+      _writeFrpcLog(
+        'Failed to show membership expiration notification: $error',
+        error: true,
+      );
+    }
+  }
+
+  Future<void> _checkTunnelHeartbeat(String deviceId) async {
+    if (_checkingTunnelHeartbeat || _frpcProcess == null) return;
+    _checkingTunnelHeartbeat = true;
+    try {
+      final tunnel = await RemoteControlApi.rdpTunnelStatus(deviceId);
+      if (!mounted || _frpcProcess == null) return;
+      if (!tunnel.mustStop) {
+        setState(() => _tunnel = tunnel);
+        return;
+      }
+
+      final process = _frpcProcess!;
+      _stopTunnelHeartbeat();
+      setState(() {
+        _frpcProcess = null;
+        _tunnel = tunnel;
+      });
+      _writeFrpcLog('Membership is no longer valid; stopping FRPC');
+      process.kill();
+      showToast('会员权益已到期，内网穿透已停止');
+      unawaited(_showMembershipExpiredNotification());
+    } catch (error) {
+      _writeFrpcLog('Membership check failed: $error', error: true);
+    } finally {
+      _checkingTunnelHeartbeat = false;
+    }
   }
 
   Future<void> _startTunnel() async {
@@ -3114,6 +3173,7 @@ class _IntranetPenetrationPageState extends State<_IntranetPenetrationPage> {
       final started = await RemoteControlApi.confirmRdpTunnelStarted(deviceId);
       if (mounted) {
         setState(() => _tunnel = started);
+        _startTunnelHeartbeat(deviceId);
         showToast('内网穿透已启动，公网端口：${config.remotePort}');
       }
     } catch (error) {
@@ -3139,6 +3199,7 @@ class _IntranetPenetrationPageState extends State<_IntranetPenetrationPage> {
   Future<void> _onFrpcExit(
       Process process, String deviceId, int exitCode) async {
     if (!identical(_frpcProcess, process)) return;
+    _stopTunnelHeartbeat();
     final detail = _frpcLog.trim();
     _writeFrpcLog(
       'Exited with code $exitCode${detail.isEmpty ? '' : ': $detail'}',
@@ -3163,6 +3224,7 @@ class _IntranetPenetrationPageState extends State<_IntranetPenetrationPage> {
     final process = _frpcProcess;
     if (process == null || _startingTunnel) return;
     setState(() => _frpcProcess = null);
+    _stopTunnelHeartbeat();
     try {
       _writeFrpcLog('Stopping FRPC process before closing the public mapping');
       process.kill();
@@ -3170,13 +3232,13 @@ class _IntranetPenetrationPageState extends State<_IntranetPenetrationPage> {
         const Duration(seconds: 5),
       );
       _writeFrpcLog(
-        'FRPC process exited with code $exitCode; closing the public mapping',
+        'FRPC process exited with code $exitCode; retaining the public port binding',
       );
       final deviceId = await bind.mainGetMyId();
       final tunnel = await RemoteControlApi.closeRdpTunnel(deviceId);
       if (mounted) {
         setState(() => _tunnel = tunnel);
-        showToast('FRPC 已停止，公网映射正在关闭');
+        showToast('FRPC 已停止，公网端口仍绑定当前设备');
       }
     } on TimeoutException {
       if (mounted) setState(() => _frpcProcess = process);
@@ -3188,6 +3250,12 @@ class _IntranetPenetrationPageState extends State<_IntranetPenetrationPage> {
     } catch (error) {
       if (mounted) showToast('停止穿透失败：$error');
     }
+  }
+
+  @override
+  void dispose() {
+    _stopTunnelHeartbeat();
+    super.dispose();
   }
 
   Future<void> _checkRemoteControlAvailability() async {

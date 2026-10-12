@@ -222,6 +222,15 @@ pub fn core_main() -> Option<Vec<String>> {
             if args[0] == "--quit-all" {
                 crate::platform::windows::quit_all_user_processes();
                 return None;
+            } else if args[0] == "--membership-expired-notification" {
+                Toast::new(Toast::POWERSHELL_APP_ID)
+                    .title(&config::APP_NAME.read().unwrap())
+                    .text1("会员权益已到期，内网穿透已停止。")
+                    .sound(Some(Sound::Default))
+                    .duration(Duration::Short)
+                    .show()
+                    .ok();
+                return None;
             } else if args[0] == "--uninstall" {
                 if let Err(err) = platform::uninstall_me(true) {
                     log::error!("Failed to uninstall: {}", err);

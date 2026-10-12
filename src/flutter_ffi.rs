@@ -962,6 +962,14 @@ pub fn main_get_error() -> String {
     get_error()
 }
 
+pub fn main_log_frpc(message: String, error: bool) {
+    if error {
+        log::error!("[FRPC] {}", message);
+    } else {
+        log::info!("[FRPC] {}", message);
+    }
+}
+
 pub fn main_set_option(key: String, value: String) {
     #[cfg(target_os = "android")]
     {

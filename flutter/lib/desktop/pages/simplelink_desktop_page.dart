@@ -3001,6 +3001,194 @@ class _IntranetPenetrationPageState extends State<_IntranetPenetrationPage> {
       const _RemoteControlAvailability.notChecked();
   bool _checking = false;
   bool _enabling = false;
+  bool _startingTunnel = false;
+  Process? _frpcProcess;
+  RemoteControlRdpTunnel? _tunnel;
+  String _frpcLog = '';
+
+  void _writeFrpcLog(String message, {bool error = false}) {
+    debugPrint('[FRPC] $message');
+    unawaited(bind.mainLogFrpc(message: message, error: error));
+  }
+
+  void _captureFrpcOutput(Stream<List<int>> stream, String source) {
+    stream
+        .transform(utf8.decoder)
+        .transform(const LineSplitter())
+        .listen((line) {
+      final message = _redactFrpcLogLine(line.trim());
+      if (message.isEmpty) return;
+      _writeFrpcLog('$source: $message', error: source == 'stderr');
+      _frpcLog = '$_frpcLog$source: $message\n';
+      if (_frpcLog.length > 4000) {
+        _frpcLog = _frpcLog.substring(_frpcLog.length - 4000);
+      }
+    });
+  }
+
+  String _redactFrpcLogLine(String value) {
+    return value.replaceAll(
+      RegExp(r'(token\s*[=:]\s*)(\S+)', caseSensitive: false),
+      r'$1<REDACTED>',
+    );
+  }
+
+  String _quotePowerShellArgument(String value) {
+    return "'${value.replaceAll("'", "''")}'";
+  }
+
+  Future<void> _startTunnel() async {
+    if (_startingTunnel || _frpcProcess != null) return;
+    if (!Platform.isWindows) {
+      showToast('内网穿透仅支持 Windows');
+      return;
+    }
+    setState(() => _startingTunnel = true);
+    String? deviceId;
+    Process? process;
+    var stage = '初始化';
+    try {
+      deviceId = await bind.mainGetMyId();
+      if (deviceId.trim().isEmpty) {
+        throw RemoteControlApiException('未获取到当前设备 ID');
+      }
+      stage = '申请公网映射端口';
+      _writeFrpcLog('Requesting public mapping port from /api/remote/rdp/open');
+      final tunnel = await RemoteControlApi.openRdpTunnel(deviceId);
+      if (!mounted) return;
+      setState(() => _tunnel = tunnel);
+
+      stage = '获取 FRPC 参数';
+      _writeFrpcLog(
+        'Requesting FRPC parameters from /api/remote/rdp/config '
+        '(device_id supplied)',
+      );
+      final config = await RemoteControlApi.rdpTunnelConfig(deviceId);
+      stage = '启动本地 FRPC';
+      final frpc = File('${File(Platform.resolvedExecutable).parent.path}'
+          '${Platform.pathSeparator}frp${Platform.pathSeparator}frpc.exe');
+      if (!await frpc.exists()) {
+        throw RemoteControlApiException('未找到 FRPC：${frpc.path}');
+      }
+      final frpcArgs = [
+        'tcp',
+        '--server_addr',
+        config.serverAddress,
+        '--server_port',
+        config.serverPort.toString(),
+        '--token',
+        config.token,
+        '--protocol',
+        config.protocol,
+        '--proxy_name',
+        config.proxyName,
+        '--local_ip',
+        config.localAddress,
+        '--local_port',
+        config.localPort.toString(),
+        '--remote_port',
+        config.remotePort.toString(),
+      ];
+      _writeFrpcLog(
+        'Manual PowerShell command (contains FRPC token): '
+        '& ${_quotePowerShellArgument(frpc.path)} '
+        '${frpcArgs.map(_quotePowerShellArgument).join(' ')}',
+      );
+      process = await Process.start(frpc.path, frpcArgs);
+      if (!mounted) {
+        process.kill();
+        try {
+          await RemoteControlApi.closeRdpTunnel(deviceId);
+        } catch (_) {}
+        return;
+      }
+      setState(() => _frpcProcess = process);
+      _frpcLog = '';
+      _writeFrpcLog(
+        'Starting proxy ${config.proxyName} on local port '
+        '${config.localPort} with public port ${config.remotePort}',
+      );
+      _captureFrpcOutput(process.stdout, 'stdout');
+      _captureFrpcOutput(process.stderr, 'stderr');
+      process.exitCode.then((code) => _onFrpcExit(process!, deviceId!, code));
+      final started = await RemoteControlApi.confirmRdpTunnelStarted(deviceId);
+      if (mounted) {
+        setState(() => _tunnel = started);
+        showToast('内网穿透已启动，公网端口：${config.remotePort}');
+      }
+    } catch (error) {
+      _writeFrpcLog(
+        'Startup failed during $stage: ${_redactFrpcLogLine(error.toString())}',
+        error: true,
+      );
+      process?.kill();
+      if (identical(_frpcProcess, process) && mounted) {
+        setState(() => _frpcProcess = null);
+      }
+      if (deviceId != null) {
+        try {
+          await RemoteControlApi.closeRdpTunnel(deviceId);
+        } catch (_) {}
+      }
+      if (mounted) showToast('启动穿透失败：$error');
+    } finally {
+      if (mounted) setState(() => _startingTunnel = false);
+    }
+  }
+
+  Future<void> _onFrpcExit(
+      Process process, String deviceId, int exitCode) async {
+    if (!identical(_frpcProcess, process)) return;
+    final detail = _frpcLog.trim();
+    _writeFrpcLog(
+      'Exited with code $exitCode${detail.isEmpty ? '' : ': $detail'}',
+      error: exitCode != 0,
+    );
+    if (mounted) setState(() => _frpcProcess = null);
+    if (mounted) {
+      final summary = detail.isEmpty
+          ? '未输出错误信息'
+          : detail
+              .replaceAll('\n', ' ')
+              .substring(0, detail.length > 300 ? 300 : detail.length);
+      showToast('FRPC 已退出（退出码 $exitCode）：$summary');
+    }
+    try {
+      final tunnel = await RemoteControlApi.closeRdpTunnel(deviceId);
+      if (mounted) setState(() => _tunnel = tunnel);
+    } catch (_) {}
+  }
+
+  Future<void> _stopTunnel() async {
+    final process = _frpcProcess;
+    if (process == null || _startingTunnel) return;
+    setState(() => _frpcProcess = null);
+    try {
+      _writeFrpcLog('Stopping FRPC process before closing the public mapping');
+      process.kill();
+      final exitCode = await process.exitCode.timeout(
+        const Duration(seconds: 5),
+      );
+      _writeFrpcLog(
+        'FRPC process exited with code $exitCode; closing the public mapping',
+      );
+      final deviceId = await bind.mainGetMyId();
+      final tunnel = await RemoteControlApi.closeRdpTunnel(deviceId);
+      if (mounted) {
+        setState(() => _tunnel = tunnel);
+        showToast('FRPC 已停止，公网映射正在关闭');
+      }
+    } on TimeoutException {
+      if (mounted) setState(() => _frpcProcess = process);
+      _writeFrpcLog(
+        'FRPC did not exit within 5 seconds; public mapping remains open',
+        error: true,
+      );
+      if (mounted) showToast('FRPC 未在 5 秒内退出，未关闭公网映射');
+    } catch (error) {
+      if (mounted) showToast('停止穿透失败：$error');
+    }
+  }
 
   Future<void> _checkRemoteControlAvailability() async {
     if (_checking) return;
@@ -3108,8 +3296,12 @@ class _IntranetPenetrationPageState extends State<_IntranetPenetrationPage> {
                                     color: const Color(0xFFF2F4F7),
                                     borderRadius: BorderRadius.circular(12),
                                   ),
-                                  child: const Text(
-                                    '未启动',
+                                  child: Text(
+                                    _frpcProcess != null
+                                        ? '运行中'
+                                        : _startingTunnel
+                                            ? '启动中'
+                                            : '未启动',
                                     style: TextStyle(
                                       fontSize: 12,
                                       fontWeight: FontWeight.w600,
@@ -3124,15 +3316,26 @@ class _IntranetPenetrationPageState extends State<_IntranetPenetrationPage> {
                               value: '3389',
                             ),
                             const SizedBox(height: 14),
-                            const _PenetrationInfoRow(
+                            _PenetrationInfoRow(
                               label: '公网映射端口',
-                              value: '由服务器分配',
+                              value:
+                                  _tunnel?.publicPort?.toString() ?? '由服务器分配',
                             ),
                             const SizedBox(height: 20),
                             FilledButton.icon(
-                              onPressed: () => showToast('内网穿透功能即将开放'),
-                              icon: const Icon(Icons.play_circle_outline),
-                              label: const Text('启动穿透流程'),
+                              onPressed: _startingTunnel
+                                  ? null
+                                  : _frpcProcess == null
+                                      ? _startTunnel
+                                      : _stopTunnel,
+                              icon: Icon(_frpcProcess == null
+                                  ? Icons.play_circle_outline
+                                  : Icons.stop_circle_outlined),
+                              label: Text(_startingTunnel
+                                  ? '启动中'
+                                  : _frpcProcess == null
+                                      ? '启动穿透流程'
+                                      : '停止穿透'),
                               style: FilledButton.styleFrom(
                                 backgroundColor: const Color(0xFF101010),
                                 foregroundColor: Colors.white,

@@ -900,6 +900,11 @@ class RustdeskImpl {
     throw UnimplementedError("mainGetHttpStatus");
   }
 
+  Future<void> mainLogFrpc(
+      {required String message, required bool error, dynamic hint}) {
+    return Future.value();
+  }
+
   String mainGetLocalOption({required String key, dynamic hint}) {
     return js.context.callMethod('getByName', ['option:local', key]);
   }

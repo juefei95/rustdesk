@@ -11,6 +11,7 @@ __pycache__
 src/version.rs
 *dmg
 *exe
+!res/frp/windows/x64/frpc.exe
 *tgz
 cert.pfx
 *.bak

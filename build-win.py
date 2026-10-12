@@ -977,6 +977,12 @@ def build_flutter_windows(version, features, skip_portable_pack):
         os.chdir('..')
     shutil.copy2('target/release/deps/dylib_virtual_display.dll',
                  flutter_build_dir_2)
+    frpc_source = Path(REPO_ROOT) / 'res' / 'frp' / 'windows' / 'x64' / 'frpc.exe'
+    if not frpc_source.is_file():
+        raise FileNotFoundError(f'FRPC executable not found: {frpc_source}')
+    frpc_destination = Path(flutter_build_dir_2) / 'frp' / 'frpc.exe'
+    frpc_destination.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(frpc_source, frpc_destination)
     if skip_portable_pack:
         return
     os.chdir('libs/portable')

@@ -76,6 +76,79 @@ class RemoteControlMembership {
   }
 }
 
+class RemoteControlRdpTunnel {
+  const RemoteControlRdpTunnel({
+    required this.status,
+    required this.publicHost,
+    required this.publicPort,
+    required this.proxyName,
+  });
+
+  final String status;
+  final String publicHost;
+  final int? publicPort;
+  final String proxyName;
+
+  factory RemoteControlRdpTunnel.fromJson(Map<String, dynamic> json) {
+    final port = int.tryParse((json['public_port'] ?? '').toString());
+    return RemoteControlRdpTunnel(
+      status: (json['status'] ?? '').toString(),
+      publicHost: (json['public_host'] ?? '').toString().trim(),
+      publicPort: port != null && port > 0 ? port : null,
+      proxyName: (json['proxy_name'] ?? '').toString().trim(),
+    );
+  }
+}
+
+class RemoteControlFrpcConfig {
+  const RemoteControlFrpcConfig({
+    required this.serverAddress,
+    required this.serverPort,
+    required this.token,
+    required this.protocol,
+    required this.proxyName,
+    required this.localAddress,
+    required this.localPort,
+    required this.remotePort,
+  });
+
+  final String serverAddress;
+  final int serverPort;
+  final String token;
+  final String protocol;
+  final String proxyName;
+  final String localAddress;
+  final int localPort;
+  final int remotePort;
+
+  factory RemoteControlFrpcConfig.fromJson(Map<String, dynamic> json) {
+    final config = RemoteControlFrpcConfig(
+      serverAddress: (json['server_addr'] ?? '').toString().trim(),
+      serverPort: int.tryParse((json['server_port'] ?? '').toString()) ?? 0,
+      token: (json['token'] ?? '').toString(),
+      protocol: (json['protocol'] ?? '').toString().trim(),
+      proxyName: (json['proxy_name'] ?? '').toString().trim(),
+      localAddress: (json['local_ip'] ?? '').toString().trim(),
+      localPort: int.tryParse((json['local_port'] ?? '').toString()) ?? 0,
+      remotePort: int.tryParse((json['remote_port'] ?? '').toString()) ?? 0,
+    );
+    if (config.serverAddress.isEmpty ||
+        config.serverPort < 1 ||
+        config.serverPort > 65535 ||
+        config.token.isEmpty ||
+        (config.protocol != 'quic' && config.protocol != 'tcp') ||
+        config.proxyName.isEmpty ||
+        config.localAddress.isEmpty ||
+        config.localPort < 1 ||
+        config.localPort > 65535 ||
+        config.remotePort < 1 ||
+        config.remotePort > 65535) {
+      throw RemoteControlApiException('Invalid FRPC configuration response');
+    }
+    return config;
+  }
+}
+
 class RemoteControlPackage {
   const RemoteControlPackage({
     required this.id,
@@ -464,5 +537,77 @@ class RemoteControlApi {
 
   static Future<bool> canControl() async {
     return (await membershipStatus()).canControl;
+  }
+
+  static Future<RemoteControlRdpTunnel> openRdpTunnel(String deviceId) async {
+    final token = bind.mainGetLocalOption(key: accessTokenKey);
+    if (token.isEmpty) {
+      throw RemoteControlApiException('请先登录');
+    }
+    final response = await http.post(
+      Uri.parse('$server/api/remote/rdp/open'),
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'token': token,
+      },
+      body: Uri(queryParameters: {'device_id': deviceId}).query,
+    );
+    return RemoteControlRdpTunnel.fromJson(_decode(response));
+  }
+
+  static Future<RemoteControlFrpcConfig> rdpTunnelConfig(
+      String deviceId) async {
+    final token = bind.mainGetLocalOption(key: accessTokenKey);
+    if (token.isEmpty) {
+      throw RemoteControlApiException('请先登录');
+    }
+    final uri = Uri.parse('$server/api/remote/rdp/config')
+        .replace(queryParameters: {'device_id': deviceId});
+    final response = await http.get(uri, headers: {'token': token});
+    try {
+      return RemoteControlFrpcConfig.fromJson(_decode(response));
+    } catch (_) {
+      await _logFrpcConfigFailure(response);
+      rethrow;
+    }
+  }
+
+  static Future<void> _logFrpcConfigFailure(http.Response response) async {
+    var body = utf8.decode(response.bodyBytes, allowMalformed: true);
+    body = body.replaceAll(
+      RegExp(r'(token\s*[=:]\s*)(\S+)', caseSensitive: false),
+      r'$1<REDACTED>',
+    );
+    if (body.length > 1000) body = '${body.substring(0, 1000)}...';
+    await bind.mainLogFrpc(
+      message: 'FRPC config response: HTTP ${response.statusCode}, body=$body',
+      error: true,
+    );
+  }
+
+  static Future<RemoteControlRdpTunnel> confirmRdpTunnelStarted(
+      String deviceId) async {
+    return _postRdpTunnelAction('started', deviceId);
+  }
+
+  static Future<RemoteControlRdpTunnel> closeRdpTunnel(String deviceId) async {
+    return _postRdpTunnelAction('close', deviceId);
+  }
+
+  static Future<RemoteControlRdpTunnel> _postRdpTunnelAction(
+      String action, String deviceId) async {
+    final token = bind.mainGetLocalOption(key: accessTokenKey);
+    if (token.isEmpty) {
+      throw RemoteControlApiException('请先登录');
+    }
+    final response = await http.post(
+      Uri.parse('$server/api/remote/rdp/$action'),
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'token': token,
+      },
+      body: Uri(queryParameters: {'device_id': deviceId}).query,
+    );
+    return RemoteControlRdpTunnel.fromJson(_decode(response));
   }
 }

@@ -3385,9 +3385,24 @@ class _IntranetPenetrationPageState extends State<_IntranetPenetrationPage> {
                             ),
                             const SizedBox(height: 14),
                             _PenetrationInfoRow(
+                              label: '公网域名',
+                              value: _tunnel?.publicHost.isNotEmpty == true
+                                  ? _tunnel!.publicHost
+                                  : '由服务器分配',
+                            ),
+                            const SizedBox(height: 14),
+                            _PenetrationInfoRow(
                               label: '公网映射端口',
                               value:
                                   _tunnel?.publicPort?.toString() ?? '由服务器分配',
+                            ),
+                            const SizedBox(height: 14),
+                            _PenetrationInfoRow(
+                              label: '远程桌面示例',
+                              value: _tunnel?.publicHost.isNotEmpty == true &&
+                                      _tunnel?.publicPort != null
+                                  ? '${_tunnel!.publicHost}:${_tunnel!.publicPort}'
+                                  : '公网域名:映射端口',
                             ),
                             const SizedBox(height: 20),
                             FilledButton.icon(

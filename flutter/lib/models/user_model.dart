@@ -205,18 +205,21 @@ class UserModel {
   Future<void> logOut({String? apiServer}) async {
     final tag = gFFI.dialogManager.showLoading(translate('Waiting'));
     try {
-      if (RemoteControlApi.isEnabled) return;
-      final url = apiServer ?? await bind.mainGetApiServer();
-      final authHeaders = getHttpHeaders();
-      authHeaders['Content-Type'] = "application/json";
-      await http
-          .post(Uri.parse('$url/api/logout'),
-              body: jsonEncode({
-                'id': await bind.mainGetMyId(),
-                'uuid': await bind.mainGetUuid(),
-              }),
-              headers: authHeaders)
-          .timeout(Duration(seconds: 2));
+      if (RemoteControlApi.isEnabled) {
+        await RemoteControlApi.logout().timeout(Duration(seconds: 2));
+      } else {
+        final url = apiServer ?? await bind.mainGetApiServer();
+        final authHeaders = getHttpHeaders();
+        authHeaders['Content-Type'] = "application/json";
+        await http
+            .post(Uri.parse('$url/api/logout'),
+                body: jsonEncode({
+                  'id': await bind.mainGetMyId(),
+                  'uuid': await bind.mainGetUuid(),
+                }),
+                headers: authHeaders)
+            .timeout(Duration(seconds: 2));
+      }
     } catch (e) {
       debugPrint("request /api/logout failed: err=$e");
     } finally {

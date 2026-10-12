@@ -311,11 +311,13 @@ class RemoteControlApi {
   static Future<RemoteControlLoginResult> login(
       String account, String password) async {
     final baseUrl = server;
+    final device = await _loginDeviceParameters();
     final response = await http.post(Uri.parse('$baseUrl/api/remote/login'),
         headers: {'Content-Type': 'application/x-www-form-urlencoded'},
         body: Uri(queryParameters: {
           'account': account,
           'password': password,
+          ...device,
         }).query);
     return _parseLoginResult(_decode(response), account);
   }
@@ -329,14 +331,31 @@ class RemoteControlApi {
 
   static Future<RemoteControlLoginResult> mobileLogin(
       String mobile, String captcha) async {
+    final device = await _loginDeviceParameters();
     final response =
         await http.post(Uri.parse('$server/api/remote/mobilelogin'),
             headers: {'Content-Type': 'application/x-www-form-urlencoded'},
             body: Uri(queryParameters: {
               'mobile': mobile,
               'captcha': captcha,
+              ...device,
             }).query);
     return _parseLoginResult(_decode(response), mobile);
+  }
+
+  static Future<void> logout() async {
+    final token = bind.mainGetLocalOption(key: accessTokenKey);
+    if (token.isEmpty) return;
+    final response = await http.post(Uri.parse('$server/api/remote/logout'),
+        headers: {'token': token});
+    _decode(response);
+  }
+
+  static Future<Map<String, String>> _loginDeviceParameters() async {
+    return {
+      'device_id': await bind.mainGetMyId(),
+      'device_uuid': await bind.mainGetUuid(),
+    };
   }
 
   static Future<WechatQrLoginSession> wechatQrLoginSession() async {

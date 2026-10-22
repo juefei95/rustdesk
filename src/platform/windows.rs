@@ -4083,6 +4083,8 @@ if exist \"%PROGRAMDATA%\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\{ap
         format!(
             "
 sc create {service_name} binpath= \"\\\"{exe}\\\" --service\" start= auto DisplayName= \"{service_display_name}\"
+sc failure {service_name} reset= 86400 actions= restart/5000/restart/15000/restart/30000
+sc failureflag {service_name} 1
 sc start {service_name}
 ",
             service_name = service_name,

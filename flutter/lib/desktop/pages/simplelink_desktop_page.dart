@@ -52,6 +52,14 @@ class _SimpleLinkDesktopPageState extends State<SimpleLinkDesktopPage>
   void initState() {
     super.initState();
     windowManager.addListener(this);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (kReleaseMode &&
+          Platform.isWindows &&
+          !bind.isDisableInstallation() &&
+          !bind.mainIsInstalled()) {
+        bind.mainGotoInstall();
+      }
+    });
     unawaited(_ensureTrayIcon());
     Future.delayed(const Duration(seconds: 2), () {
       if (mounted) {

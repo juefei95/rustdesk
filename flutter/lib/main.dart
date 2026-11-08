@@ -160,6 +160,7 @@ void runMainApp(bool startService) async {
     // Restore the location of the main window before window hide or show.
     await restoreWindowPosition(WindowType.Main);
     if (!bind.isIncomingOnly()) {
+      await windowManager.setMinimumSize(const Size(1072, 700));
       await windowManager.setSize(const Size(1072, 700));
     }
     // Check the startup argument, if we successfully handle the argument, we keep the main window hidden.

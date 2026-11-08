@@ -359,8 +359,10 @@ class RemoteControlApi {
   }
 
   static Future<WechatQrLoginSession> wechatQrLoginSession() async {
-    final response = await http
-        .get(Uri.parse('$server/addons/wechatqrcodelogin/index/loginqrcode'));
+    final device = await _loginDeviceParameters();
+    final uri = Uri.parse('$server/addons/remotecontrol/wechat/create')
+        .replace(queryParameters: device);
+    final response = await http.get(uri);
     final data = _decode(response);
     final scene = (data['scene'] ?? '').toString();
     final qrUrl = (data['qr_url'] ?? '').toString();
@@ -378,7 +380,7 @@ class RemoteControlApi {
 
   static Future<RemoteControlLoginResult?> queryWechatQrLogin(
       String scene) async {
-    final uri = Uri.parse('$server/addons/wechatqrcodelogin/index/loginstatus')
+    final uri = Uri.parse('$server/addons/remotecontrol/wechat/poll')
         .replace(queryParameters: {'scene': scene});
     final response = await http.get(uri);
     final data = _decode(response);

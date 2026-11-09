@@ -5067,6 +5067,18 @@ class _SimpleLinkSettingsPageState extends State<_SimpleLinkSettingsPage> {
 
   Future<void> _checkForUpdate() async {
     showToast('正在检查更新');
+    try {
+      await RemoteControlApi.refreshClientUrls();
+    } catch (e) {
+      debugPrint('Failed to refresh update configuration: $e');
+    }
+    final manifest = Uri.tryParse(
+        bind.mainGetLocalOption(key: RemoteControlApi.updateManifestKey));
+    if (manifest == null || manifest.scheme != 'https' || manifest.host.isEmpty ||
+        manifest.userInfo.isNotEmpty) {
+      showToast('请在后台配置有效的 HTTPS 更新清单地址');
+      return;
+    }
     await bind.mainSetLocalOption(
       key: _simpleLinkManualUpdateCheckOption,
       value: 'Y',
@@ -5075,8 +5087,18 @@ class _SimpleLinkSettingsPageState extends State<_SimpleLinkSettingsPage> {
   }
 
   Future<void> _openOfficialWebsite() async {
+    try {
+      await RemoteControlApi.refreshClientUrls();
+    } catch (e) {
+      debugPrint('Failed to refresh website configuration: $e');
+    }
+    final url = Uri.tryParse(bind.mainGetLocalOption(key: RemoteControlApi.officialUrlKey));
+    if (url == null || url.scheme != 'https' || url.host.isEmpty || url.userInfo.isNotEmpty) {
+      if (mounted) showToast('请在后台配置有效的 HTTPS 官网地址');
+      return;
+    }
     final opened = await launchUrl(
-      Uri.parse('https://lindiantech.top/'),
+      url,
       mode: LaunchMode.externalApplication,
     );
     if (!opened && mounted) {

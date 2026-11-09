@@ -4110,6 +4110,11 @@ void checkUpdate() {
       }
     });
     Timer(const Duration(seconds: 1), () async {
+      try {
+        await RemoteControlApi.refreshClientUrls();
+      } catch (e) {
+        debugPrint('Failed to refresh update configuration: $e');
+      }
       bind.mainGetSoftwareUpdateUrl();
     });
   }

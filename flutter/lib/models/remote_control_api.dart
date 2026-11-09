@@ -239,6 +239,8 @@ class WechatQrLoginSession {
 
 class RemoteControlApi {
   static const accessTokenKey = 'remote_control_access_token';
+  static const updateManifestKey = 'remote-control-update-manifest-url';
+  static const officialUrlKey = 'remote-control-official-url';
 
   static bool get isConfigured => server.isNotEmpty;
 
@@ -278,6 +280,7 @@ class RemoteControlApi {
       final response =
           await http.get(Uri.parse('$baseUrl/api/remote/client/config'));
       final data = _decode(response);
+      await _saveClientUrls(data);
       final idServer = (data['id_server'] ?? '').toString().trim();
       if (idServer.isEmpty) {
         await bind.mainSetLocalOption(key: _backendMarker, value: 'N');
@@ -299,6 +302,25 @@ class RemoteControlApi {
     } catch (_) {
       if (isEnabled) rethrow;
       return false;
+    }
+  }
+
+  static Future<void> refreshClientUrls() async {
+    if (!isConfigured) return;
+    final response = await http
+        .get(Uri.parse('$server/api/remote/client/config'))
+        .timeout(const Duration(seconds: 10));
+    await _saveClientUrls(_decode(response));
+  }
+
+  static Future<void> _saveClientUrls(Map<String, dynamic> data) async {
+    if (data.containsKey('update_url')) {
+      await bind.mainSetLocalOption(
+          key: updateManifestKey, value: (data['update_url'] ?? '').toString().trim());
+    }
+    if (data.containsKey('official_url')) {
+      await bind.mainSetLocalOption(
+          key: officialUrlKey, value: (data['official_url'] ?? '').toString().trim());
     }
   }
 

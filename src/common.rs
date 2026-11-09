@@ -101,7 +101,7 @@ lazy_static::lazy_static! {
     static ref PUBLIC_IPV6_ADDR: Arc<Mutex<(Option<SocketAddr>, Option<Instant>)>> = Default::default();
 }
 
-const DIANLIAN_STABLE_MANIFEST_URL: &str = "https://download.zhenhaiedu.top/stable.json";
+const DIANLIAN_STABLE_MANIFEST_OPTION: &str = "remote-control-update-manifest-url";
 const DIANLIAN_UPDATE_LAST_SUCCESS_OPTION: &str = "simplelink-update-last-success";
 const DIANLIAN_MANUAL_UPDATE_CHECK_OPTION: &str = "simplelink-manual-update-check";
 const DIANLIAN_UPDATE_CHECK_INTERVAL_SECS: u64 = 24 * 60 * 60;
@@ -1022,12 +1022,17 @@ pub fn check_software_update() {
 
 #[tokio::main(flavor = "current_thread")]
 async fn do_check_dianlian_software_update() -> ResultType<()> {
+    let manifest_url = LocalConfig::get_option(DIANLIAN_STABLE_MANIFEST_OPTION);
+    let parsed = url::Url::parse(&manifest_url)?;
+    if parsed.scheme() != "https" || parsed.host_str().is_none() || !parsed.username().is_empty() || parsed.password().is_some() {
+        bail!("Invalid update manifest URL");
+    }
     let client = crate::hbbs_http::create_http_client_async_with_url_strict(
-        DIANLIAN_STABLE_MANIFEST_URL,
+        &manifest_url,
     )
     .await?;
     let response = client
-        .get(DIANLIAN_STABLE_MANIFEST_URL)
+        .get(&manifest_url)
         .send()
         .await?
         .error_for_status()?;

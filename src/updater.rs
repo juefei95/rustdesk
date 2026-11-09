@@ -353,39 +353,29 @@ fn update_new_version(update_msi: bool, version: &str, file_path: &PathBuf) {
 }
 
 pub fn get_update_download_file_from_url(url: &str) -> Option<PathBuf> {
+    let manifest_url = crate::common::SOFTWARE_UPDATE_URL.lock().unwrap().clone();
+    let manifest_sha256 = crate::common::SOFTWARE_UPDATE_SHA256.lock().unwrap().clone();
+    get_manifest_download_file(url, &manifest_url, &manifest_sha256)
+}
+
+fn get_manifest_download_file(url: &str, manifest_url: &str, sha256: &str) -> Option<PathBuf> {
+    if url != manifest_url || sha256.len() != 64 || !sha256.bytes().all(|c| c.is_ascii_hexdigit()) {
+        return None;
+    }
     let parsed = url::Url::parse(url).ok()?;
-    // Check the raw prefix before Url normalizes default ports.
-    if !url.starts_with("https://github.com/")
-        || parsed.scheme() != "https"
-        || parsed.host_str() != Some("github.com")
+    if parsed.scheme() != "https"
+        || parsed.host_str().is_none()
         || !parsed.username().is_empty()
         || parsed.password().is_some()
-        || parsed.port().is_some()
         || parsed.query().is_some()
         || parsed.fragment().is_some()
     {
         return None;
     }
-
-    let mut segments = parsed.path_segments()?;
-    let owner = segments.next()?;
-    let repo = segments.next()?;
-    let releases = segments.next()?;
-    let download = segments.next()?;
-    let tag = segments.next()?;
-    let filename = segments.next()?;
-
-    if owner != "rustdesk"
-        || repo != "rustdesk"
-        || releases != "releases"
-        || download != "download"
-        || tag.is_empty()
-        || segments.next().is_some()
-        || !is_plain_update_filename(filename)
-    {
+    let filename = parsed.path_segments()?.last()?;
+    if !is_plain_update_filename(filename) || !filename.to_ascii_lowercase().ends_with(".exe") {
         return None;
     }
-
     Some(std::env::temp_dir().join(filename))
 }
 
@@ -656,37 +646,31 @@ pub fn check_update_as_root() -> ResultType<bool> {
 
 #[cfg(test)]
 mod tests {
-    use super::get_download_file_from_url;
+    use super::get_manifest_download_file;
 
     #[test]
-    fn update_download_file_accepts_expected_github_asset_urls() {
-        let file = get_download_file_from_url(
-            "https://github.com/rustdesk/rustdesk/releases/download/1.4.0/rustdesk-1.4.0-x86_64.dmg",
-        )
-        .expect("valid GitHub release asset URL");
-
+    fn manifest_download_requires_matching_url_and_sha256() {
+        let url = "https://download.zhenhaiedu.top/dianlian-2.0.1-install.exe";
+        let sha = "a".repeat(64);
         assert_eq!(
-            file.file_name().and_then(|name| name.to_str()),
-            Some("rustdesk-1.4.0-x86_64.dmg")
+            get_manifest_download_file(url, url, &sha)
+                .and_then(|p| p.file_name().map(|n| n.to_owned())),
+            Some("dianlian-2.0.1-install.exe".into())
         );
-    }
-
-    #[test]
-    fn update_download_file_rejects_untrusted_or_malformed_urls() {
-        for url in [
-            "http://github.com/rustdesk/rustdesk/releases/download/1/rustdesk.exe",
-            "https://example.com/rustdesk.exe",
-            "https://github.com/other/project/releases/download/1/rustdesk.exe",
-            "https://github.com/rustdesk/rustdesk/releases/download/1/",
-            "https://github.com/rustdesk/rustdesk/releases/download/1/nested/rustdesk.exe",
-            "https://github.com/rustdesk/rustdesk/releases/download/1/C:rustdesk.exe",
-            "https://user@github.com/rustdesk/rustdesk/releases/download/1/rustdesk.exe",
-            "https://github.com:443/rustdesk/rustdesk/releases/download/1/rustdesk.exe",
-            "https://github.com/rustdesk/rustdesk/releases/download/1/rustdesk.exe?download=1",
-            "https://github.com/rustdesk/rustdesk/releases/download/1/rustdesk.exe#download",
-            "not a url",
+        assert!(
+            get_manifest_download_file(url, "https://example.com/other.exe", &sha).is_none()
+        );
+        assert!(get_manifest_download_file(url, url, "").is_none());
+        for invalid in [
+            "http://example.com/file.exe",
+            "https://user@example.com/file.exe",
+            "https://example.com/file.exe?x=1",
+            "https://example.com/file.exe#x",
+            "https://example.com/",
+            "https://example.com/file.zip",
         ] {
-            assert!(get_download_file_from_url(url).is_none(), "{url}");
+            assert!(get_manifest_download_file(invalid, invalid, &sha).is_none());
         }
     }
+
 }

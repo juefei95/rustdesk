@@ -1866,6 +1866,7 @@ class _HomeTwoColumnLayout extends StatelessWidget {
               leftColumn,
               const SizedBox(height: 24),
               const _QuickConnectCard(),
+              const _AnnouncementCard(),
             ],
           );
         }
@@ -1874,10 +1875,104 @@ class _HomeTwoColumnLayout extends StatelessWidget {
           children: [
             Expanded(flex: 48, child: leftColumn),
             const SizedBox(width: 24),
-            const Expanded(flex: 52, child: _QuickConnectCard()),
+            const Expanded(
+              flex: 52,
+              child: Column(
+                children: [
+                  _QuickConnectCard(),
+                  _AnnouncementCard(),
+                ],
+              ),
+            ),
           ],
         );
       },
+    );
+  }
+}
+
+class _AnnouncementCard extends StatefulWidget {
+  const _AnnouncementCard();
+
+  @override
+  State<_AnnouncementCard> createState() => _AnnouncementCardState();
+}
+
+class _AnnouncementCardState extends State<_AnnouncementCard> {
+  List<String> _items = [];
+  int _index = 0;
+  Timer? _refreshTimer;
+  Timer? _rotationTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    _refresh();
+    _refreshTimer = Timer.periodic(const Duration(minutes: 5), (_) => _refresh());
+    _rotationTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+      if (_items.length > 1) {
+        setState(() => _index = (_index + 1) % _items.length);
+      }
+    });
+  }
+
+  Future<void> _refresh() async {
+    if (!RemoteControlApi.isConfigured) return;
+    try {
+      final items = await RemoteControlApi.announcements();
+      if (!mounted) return;
+      setState(() {
+        _items = items;
+        if (_index >= items.length) _index = 0;
+      });
+    } catch (e) {
+      debugPrint('Failed to load announcements: $e');
+    }
+  }
+
+  @override
+  void dispose() {
+    _refreshTimer?.cancel();
+    _rotationTimer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_items.isEmpty) return const SizedBox.shrink();
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(top: 16),
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border.all(color: const Color(0xFFDCE4F0)),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(children: [
+            Icon(Icons.campaign_outlined, color: Color(0xFF1769FF)),
+            SizedBox(width: 8),
+            Text('公告', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+          ]),
+          const SizedBox(height: 12),
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 350),
+            transitionBuilder: (child, animation) => SlideTransition(
+              position: Tween<Offset>(begin: const Offset(0, 0.3), end: Offset.zero)
+                  .animate(animation),
+              child: FadeTransition(opacity: animation, child: child),
+            ),
+            child: Text(
+              _items[_index],
+              key: ValueKey('$_index:${_items[_index]}'),
+              style: const TextStyle(fontSize: 14, height: 1.5, color: Color(0xFF51617A)),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

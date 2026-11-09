@@ -378,6 +378,18 @@ class RemoteControlApi {
     );
   }
 
+  static Future<List<String>> announcements() async {
+    final response = await http
+        .get(Uri.parse('$server/addons/remotecontrol/announcement/index'))
+        .timeout(const Duration(seconds: 10));
+    final data = _decode(response);
+    final items = data['items'];
+    if (items is! List) {
+      throw RemoteControlApiException('Invalid announcement response');
+    }
+    return items.whereType<String>().where((item) => item.isNotEmpty).toList();
+  }
+
   static Future<RemoteControlLoginResult?> queryWechatQrLogin(
       String scene) async {
     final uri = Uri.parse('$server/addons/remotecontrol/wechat/poll')

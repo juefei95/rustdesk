@@ -5007,7 +5007,7 @@ class _SimpleLinkSettingsPageState extends State<_SimpleLinkSettingsPage> {
         bind.mainGetLocalOption(key: _simpleLinkCloseToTrayOption) != 'N';
     _savedUdpPunch = bind.mainGetLocalOption(key: kOptionEnableUdpPunch) != 'N';
     _savedIpv6Punch =
-        bind.mainGetLocalOption(key: kOptionEnableIpv6Punch) == 'Y';
+        bind.mainGetLocalOption(key: kOptionEnableIpv6Punch) != 'N';
     _autoStart = _savedAutoStart;
     _checkUpdates = _savedCheckUpdates;
     _closeToTray = _savedCloseToTray;
@@ -5250,27 +5250,13 @@ class _SimpleLinkSettingsPageState extends State<_SimpleLinkSettingsPage> {
     showToast('设置已保存');
   }
 
-  void _cancel() {
-    setState(() {
-      _autoStart = _savedAutoStart;
-      _checkUpdates = _savedCheckUpdates;
-      _closeToTray = _savedCloseToTray;
-      _udpPunch = _savedUdpPunch;
-      _ipv6Punch = _savedIpv6Punch;
-    });
-    bind.mainSetLocalOption(
-      key: _simpleLinkCloseToTrayOption,
-      value: _savedCloseToTray ? 'Y' : 'N',
-    );
-  }
-
   void _restoreDefaults() {
     setState(() {
       _autoStart = true;
       _checkUpdates = true;
       _closeToTray = true;
       _udpPunch = true;
-      _ipv6Punch = false;
+      _ipv6Punch = true;
     });
     bind.mainSetLocalOption(
       key: _simpleLinkCloseToTrayOption,
@@ -5400,22 +5386,6 @@ class _SimpleLinkSettingsPageState extends State<_SimpleLinkSettingsPage> {
                               borderRadius: BorderRadius.circular(6),
                             ),
                           ),
-                        ),
-                      ),
-                      const SizedBox(width: 20),
-                      SizedBox(
-                        width: 88,
-                        height: 38,
-                        child: OutlinedButton(
-                          onPressed: _cancel,
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: const Color(0xFF334155),
-                            side: const BorderSide(color: Color(0xFFDDE5F0)),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                          ),
-                          child: const Text('取消'),
                         ),
                       ),
                       const SizedBox(width: 16),

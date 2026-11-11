@@ -297,7 +297,7 @@ class RemoteControlApi {
       await bind.mainSetOption(
           key: 'api-server', value: (data['api_server'] ?? '').toString());
       await _setPunchOptionDefault(kOptionEnableUdpPunch, true);
-      await _setPunchOptionDefault(kOptionEnableIpv6Punch, false);
+      await _setPunchOptionDefault(kOptionEnableIpv6Punch, true);
       return true;
     } catch (_) {
       if (isEnabled) rethrow;
